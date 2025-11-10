@@ -1,0 +1,52 @@
+# Local Testing Configuration (No Databricks Required)
+databricks:
+  host: "local"
+  token: "local"
+  workspace_path: "/local/gnu-mlops"
+
+# MLflow Configuration - Local SQLite
+mlflow:
+  experiment_name: "gnu-mlops-local-experiments"
+  model_name: "gnu-mlops-model-local"
+  tracking_uri: "sqlite:///mlflow.db"  # Local SQLite database
+
+# Model Configuration
+model:
+  algorithm: "random_forest"
+  hyperparameters:
+    n_estimators: 100
+    max_depth: 10
+    random_state: 42
+  
+# Training Configuration
+training:
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  cv_folds: 5
+
+# Data Configuration
+data:
+  source: "local"
+  table_name: "training_data"
+  features:
+    - feature1
+    - feature2
+    - feature3
+  target: "target_column"
+  
+# Deployment Configuration
+deployment:
+  model_stage: "Production"
+  endpoint_name: "gnu-mlops-endpoint-local"
+  compute_config:
+    min_workers: 1
+    max_workers: 4
+    instance_type: "local"
+
+# Monitoring Configuration
+monitoring:
+  enable_drift_detection: false
+  log_predictions: true
+  alert_email: "nbetini@gmail.com"
+

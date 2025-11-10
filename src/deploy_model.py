@@ -23,12 +23,14 @@ class ModelDeployment:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Set up MLflow
-        mlflow.set_tracking_uri(self.config['mlflow']['tracking_uri'])
+        # Set up MLflow - Use environment variable if set, otherwise use config
+        tracking_uri = os.getenv('MLFLOW_TRACKING_URI', self.config['mlflow']['tracking_uri'])
+        mlflow.set_tracking_uri(tracking_uri)
         self.client = MlflowClient()
         self.model_name = self.config['mlflow']['model_name']
         
         logger.info(f"Initialized deployment for model: {self.model_name}")
+        logger.info(f"MLflow tracking URI: {tracking_uri}")
     
     def get_latest_model_version(self):
         """Get the latest version of the registered model"""

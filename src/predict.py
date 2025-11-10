@@ -3,6 +3,7 @@ Model Prediction Script
 Load and use deployed model for predictions
 """
 
+import os
 import mlflow
 import yaml
 import pandas as pd
@@ -22,14 +23,16 @@ class ModelPredictor:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Set up MLflow
-        mlflow.set_tracking_uri(self.config['mlflow']['tracking_uri'])
+        # Set up MLflow - Use environment variable if set, otherwise use config
+        tracking_uri = os.getenv('MLFLOW_TRACKING_URI', self.config['mlflow']['tracking_uri'])
+        mlflow.set_tracking_uri(tracking_uri)
         self.model_name = self.config['mlflow']['model_name']
         self.stage = stage
         
         # Load model
         self.model = self._load_model()
         logger.info(f"Loaded {stage} model: {self.model_name}")
+        logger.info(f"MLflow tracking URI: {tracking_uri}")
     
     def _load_model(self):
         """Load model from MLflow registry"""
