@@ -1,6 +1,14 @@
 """
-ML Model Training Script with MLflow Integration
-This script trains a machine learning model using Databricks and MLflow
+Custom ML Training Pipeline
+Author: Narsimha Betini
+Purpose: Train and track ML models using MLflow with Databricks backend
+Created: 2025
+
+This module handles the complete lifecycle of model training including:
+- Data ingestion from various sources
+- Preprocessing and feature engineering  
+- Model training with validation
+- Performance tracking and logging
 """
 
 import os
@@ -15,135 +23,268 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.preprocessing import StandardScaler
 from databricks import sql
 import logging
+from pathlib import Path
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Setup logging with custom format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
 class MLModelTrainer:
-    """MLOps Model Training Pipeline"""
+    """
+    Handles end-to-end model training workflow
+    
+    This class orchestrates the entire training process from data loading
+    through model evaluation and registration. It integrates with MLflow
+    for experiment tracking and model versioning.
+    """
     
     def __init__(self, config_path='config.yaml'):
-        """Initialize the trainer with configuration"""
-        with open(config_path, 'r') as f:
+        """
+        Set up the training environment
+        
+        Args:
+            config_path: Path to YAML configuration file
+        """
+        # Load configuration - validate it exists first
+        config_file = Path(config_path)
+        if not config_file.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+            
+        with open(config_file, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Set up MLflow - Use environment variable if set, otherwise use config
-        tracking_uri = os.getenv('MLFLOW_TRACKING_URI', self.config['mlflow']['tracking_uri'])
+        # Initialize MLflow connection
+        # Priority: environment variable > config file > default
+        tracking_uri = os.getenv('MLFLOW_TRACKING_URI') or self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
         mlflow.set_tracking_uri(tracking_uri)
-        mlflow.set_experiment(self.config['mlflow']['experiment_name'])
         
-        logger.info(f"Initialized trainer with experiment: {self.config['mlflow']['experiment_name']}")
-        logger.info(f"MLflow tracking URI: {tracking_uri}")
+        # Set up experiment for organizing runs
+        experiment_name = self.config['mlflow']['experiment_name']
+        mlflow.set_experiment(experiment_name)
+        
+        logger.info(f"Training pipeline initialized")
+        logger.info(f"→ Experiment: {experiment_name}")
+        logger.info(f"→ Tracking: {tracking_uri}")
     
     def load_data(self):
-        """Load data from Databricks"""
-        logger.info("Loading data from Databricks...")
+        """
+        Fetch training data from configured source
         
-        # For Databricks, you can use spark or databricks-sql-connector
-        # Example using spark (when running on Databricks)
-        try:
-            from pyspark.sql import SparkSession
-            spark = SparkSession.builder.getOrCreate()
-            df = spark.table(self.config['data']['table_name']).toPandas()
-            logger.info(f"Loaded {len(df)} rows from {self.config['data']['table_name']}")
-            return df
-        except Exception as e:
-            logger.warning(f"Spark not available: {e}")
-            # Fallback to sample data for local testing
-            logger.info("Using sample data for demonstration")
-            return self._generate_sample_data()
+        Returns:
+            pandas.DataFrame: Loaded dataset
+        """
+        data_source = self.config['data'].get('source', 'databricks')
+        logger.info(f"Attempting to load data from: {data_source}")
+        
+        # Try Databricks/Spark first if available
+        if data_source == 'databricks':
+            try:
+                from pyspark.sql import SparkSession
+                spark = SparkSession.builder.getOrCreate()
+                table_name = self.config['data']['table_name']
+                
+                logger.info(f"Connecting to Spark table: {table_name}")
+                spark_df = spark.table(table_name)
+                df = spark_df.toPandas()
+                
+                logger.info(f"✓ Successfully loaded {len(df):,} records from Databricks")
+                return df
+                
+            except Exception as spark_error:
+                logger.warning(f"Spark connection failed: {spark_error}")
+                logger.info("Falling back to sample data generation...")
+        
+        # Generate sample data for local development
+        return self._create_synthetic_dataset()
     
-    def _generate_sample_data(self, n_samples=1000):
-        """Generate sample data for testing"""
-        np.random.seed(42)
-        data = {
-            'feature1': np.random.randn(n_samples),
-            'feature2': np.random.randn(n_samples),
-            'feature3': np.random.randn(n_samples),
-            'target_column': np.random.randint(0, 2, n_samples)
+    def _create_synthetic_dataset(self, num_records=1000):
+        """
+        Create synthetic dataset for testing purposes
+        
+        Args:
+            num_records: Number of samples to generate
+            
+        Returns:
+            pandas.DataFrame: Synthetic dataset
+        """
+        logger.info(f"Generating {num_records:,} synthetic records...")
+        
+        # Set seed for reproducibility
+        np.random.seed(self.config['training'].get('random_state', 42))
+        
+        # Build feature dictionary
+        synthetic_data = {
+            'feature1': np.random.randn(num_records),
+            'feature2': np.random.randn(num_records), 
+            'feature3': np.random.randn(num_records),
+            'target_column': np.random.randint(0, 2, num_records)
         }
-        return pd.DataFrame(data)
+        
+        dataset = pd.DataFrame(synthetic_data)
+        logger.info(f"✓ Created synthetic dataset with shape: {dataset.shape}")
+        
+        return dataset
     
     def preprocess_data(self, df):
-        """Preprocess the data"""
-        logger.info("Preprocessing data...")
+        """
+        Prepare data for model training
         
-        # Extract features and target
-        feature_cols = self.config['data']['features']
-        target_col = self.config['data']['target']
+        Performs data cleaning, feature extraction, train/test splitting,
+        and feature scaling. This ensures data is in the right format
+        for the ML algorithm.
         
-        # Handle missing values
-        df = df.dropna()
+        Args:
+            df: Raw input dataframe
+            
+        Returns:
+            tuple: (X_train_scaled, X_test_scaled, y_train, y_test, scaler)
+        """
+        logger.info("Starting data preprocessing pipeline...")
         
-        X = df[feature_cols]
-        y = df[target_col]
+        # Get column names from configuration
+        feature_columns = self.config['data']['features']
+        target_column = self.config['data']['target']
         
-        # Split data
-        test_size = self.config['training']['test_size']
-        random_state = self.config['training']['random_state']
+        logger.info(f"→ Features to use: {', '.join(feature_columns)}")
+        logger.info(f"→ Target variable: {target_column}")
         
+        # Data cleaning - remove any incomplete records
+        initial_rows = len(df)
+        df_clean = df.dropna()
+        rows_removed = initial_rows - len(df_clean)
+        
+        if rows_removed > 0:
+            logger.warning(f"Removed {rows_removed} rows with missing values")
+        
+        # Separate features from target
+        X_features = df_clean[feature_columns]
+        y_target = df_clean[target_column]
+        
+        # Configure train/test split parameters
+        test_ratio = self.config['training']['test_size']
+        seed_value = self.config['training']['random_state']
+        
+        logger.info(f"Splitting data: {int((1-test_ratio)*100)}% train, {int(test_ratio*100)}% test")
+        
+        # Perform stratified split to maintain class distribution
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
+            X_features, 
+            y_target, 
+            test_size=test_ratio, 
+            random_state=seed_value,
+            stratify=y_target  # Keep same class proportions
         )
         
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        # Apply feature scaling (normalize to mean=0, std=1)
+        # Important: fit on train only to avoid data leakage!
+        feature_scaler = StandardScaler()
+        X_train_normalized = feature_scaler.fit_transform(X_train)
+        X_test_normalized = feature_scaler.transform(X_test)
         
-        logger.info(f"Training set size: {len(X_train)}, Test set size: {len(X_test)}")
+        logger.info(f"✓ Preprocessing complete")
+        logger.info(f"  Training samples: {len(X_train):,}")
+        logger.info(f"  Testing samples: {len(X_test):,}")
+        logger.info(f"  Features: {X_train.shape[1]}")
         
-        return X_train_scaled, X_test_scaled, y_train, y_test, scaler
+        return X_train_normalized, X_test_normalized, y_train, y_test, feature_scaler
     
     def train_model(self, X_train, y_train):
-        """Train the ML model"""
-        logger.info("Training model...")
+        """
+        Build and train the machine learning model
         
-        # Get model hyperparameters from config
-        hyperparams = self.config['model']['hyperparameters']
+        Uses cross-validation to assess model quality before
+        training the final model on all training data.
         
-        # Initialize model
-        model = RandomForestClassifier(**hyperparams)
+        Args:
+            X_train: Training features (scaled)
+            y_train: Training labels
+            
+        Returns:
+            tuple: (trained_model, cv_scores)
+        """
+        logger.info("Initiating model training...")
         
-        # Perform cross-validation
-        cv_scores = cross_val_score(
-            model, X_train, y_train, 
-            cv=self.config['training']['cv_folds'],
-            scoring='accuracy'
+        # Extract hyperparameters from config
+        model_params = self.config['model']['hyperparameters']
+        algorithm_type = self.config['model'].get('algorithm', 'random_forest')
+        
+        logger.info(f"→ Algorithm: {algorithm_type}")
+        logger.info(f"→ Parameters: {model_params}")
+        
+        # Create model instance with configured parameters
+        ml_model = RandomForestClassifier(**model_params)
+        
+        # Validate model using k-fold cross-validation
+        num_folds = self.config['training']['cv_folds']
+        logger.info(f"Running {num_folds}-fold cross-validation...")
+        
+        validation_scores = cross_val_score(
+            ml_model, 
+            X_train, 
+            y_train,
+            cv=num_folds,
+            scoring='accuracy',
+            n_jobs=-1  # Use all CPU cores
         )
         
-        logger.info(f"Cross-validation scores: {cv_scores}")
-        logger.info(f"Mean CV score: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+        # Calculate summary statistics
+        mean_score = validation_scores.mean()
+        std_score = validation_scores.std()
         
-        # Train final model
-        model.fit(X_train, y_train)
+        logger.info(f"✓ Cross-validation results:")
+        logger.info(f"  Individual fold scores: {[f'{score:.4f}' for score in validation_scores]}")
+        logger.info(f"  Mean accuracy: {mean_score:.4f}")
+        logger.info(f"  Std deviation: ±{std_score:.4f}")
         
-        return model, cv_scores
+        # Now train on complete training set
+        logger.info("Training final model on full training data...")
+        ml_model.fit(X_train, y_train)
+        logger.info("✓ Model training complete")
+        
+        return ml_model, validation_scores
     
     def evaluate_model(self, model, X_test, y_test):
-        """Evaluate the trained model"""
-        logger.info("Evaluating model...")
+        """
+        Assess model performance on held-out test data
         
-        # Make predictions
-        y_pred = model.predict(X_test)
-        y_pred_proba = model.predict_proba(X_test)[:, 1]
+        Computes multiple metrics to get a comprehensive view
+        of model quality from different perspectives.
         
-        # Calculate metrics
-        metrics = {
-            'accuracy': accuracy_score(y_test, y_pred),
-            'precision': precision_score(y_test, y_pred, average='weighted'),
-            'recall': recall_score(y_test, y_pred, average='weighted'),
-            'f1_score': f1_score(y_test, y_pred, average='weighted'),
-            'roc_auc': roc_auc_score(y_test, y_pred_proba)
+        Args:
+            model: Trained ML model
+            X_test: Test features
+            y_test: True labels for test set
+            
+        Returns:
+            dict: Performance metrics
+        """
+        logger.info("Running model evaluation on test set...")
+        
+        # Generate predictions
+        predicted_labels = model.predict(X_test)
+        predicted_probabilities = model.predict_proba(X_test)[:, 1]
+        
+        # Compute comprehensive metrics
+        performance_metrics = {
+            'accuracy': accuracy_score(y_test, predicted_labels),
+            'precision': precision_score(y_test, predicted_labels, average='weighted', zero_division=0),
+            'recall': recall_score(y_test, predicted_labels, average='weighted', zero_division=0),
+            'f1_score': f1_score(y_test, predicted_labels, average='weighted', zero_division=0),
+            'roc_auc': roc_auc_score(y_test, predicted_probabilities)
         }
         
-        logger.info("Model Metrics:")
-        for metric_name, metric_value in metrics.items():
-            logger.info(f"  {metric_name}: {metric_value:.4f}")
+        # Display results
+        logger.info("✓ Evaluation complete - Performance Summary:")
+        for metric_name, score in performance_metrics.items():
+            # Format metric name for display
+            display_name = metric_name.replace('_', ' ').title()
+            logger.info(f"  • {display_name}: {score:.4f}")
         
-        return metrics
+        return performance_metrics
     
     def run_training_pipeline(self):
         """Execute the complete training pipeline with MLflow tracking"""
