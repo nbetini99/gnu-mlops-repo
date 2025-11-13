@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class ModelPredictor:
     """Load and use ML model for predictions"""
     
-    def __init__(self, config_path='config.yaml', stage='Production'):
+    def __init__(self, config_path='config.yaml', stage='GNU_Production'):
         """Initialize predictor with configuration"""
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
@@ -121,8 +121,8 @@ def main():
     parser.add_argument(
         '--stage',
         type=str,
-        default='Production',
-        choices=['Staging', 'Production'],
+        default='GNU_Production',
+        choices=['Staging', 'GNU_Production'],
         help='Model stage to use'
     )
     

@@ -65,3 +65,33 @@ artifacts/
 .DS_Store
 Thumbs.db
 
+
+
+# Educational and test documentation files (generated, not tracked)
+CODE_EDUCATION_GUIDE.md
+CODE_QUICK_REFERENCE.md
+QUICK_START_GUIDE.md
+TEST_SUMMARY.md
+TEST_RESULTS_COMPREHENSIVE.md
+SAMPLE_DATA_TEST_REPORT.md
+DATABRICKS_TEST_PLAN.md
+
+# Test data and artifacts
+sample_training_data.csv
+test_with_sample_data.py
+test_local_databricks.py
+diagnose_network.sh
+
+# MLflow local database
+mlflow.db
+
+DOWNLOAD_GUIDE.txt
+REFACTORING_SUMMARY.md
+test_refactored_code.py
+test_experiment_name_change.py
+REFACTORING_CHANGE_LOG.md
+test_production_change.py
+PRODUCTION_CHANGE_SUMMARY.md
+LOCAL_RUN_GUIDE.md
+RUN_COMMANDS.sh
+SIMPLE_COMMANDS.txt

@@ -44,7 +44,7 @@ try:
         config = yaml.safe_load(f)
     print("✓ config.yaml is valid YAML")
     print(f"  Model: {config['model']['algorithm']}")
-    print(f"  Experiment: {config['mlflow']['experiment_name']}")
+    print(f"  Experiment: {config['mlflow']['gnu_mlflow_config']}")
 except Exception as e:
     print(f"✗ Configuration error: {e}")
     exit(1)

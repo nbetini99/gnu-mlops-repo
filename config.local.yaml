@@ -6,7 +6,7 @@ databricks:
 
 # MLflow Configuration - Local SQLite
 mlflow:
-  experiment_name: "gnu-mlops-local-experiments"
+  gnu_mlflow_config: "gnu-mlops-local-experiments"
   model_name: "gnu-mlops-model-local"
   tracking_uri: "sqlite:///mlflow.db"  # Local SQLite database
 
@@ -37,7 +37,7 @@ data:
   
 # Deployment Configuration
 deployment:
-  model_stage: "Production"
+  model_stage: "GNU_Production"
   endpoint_name: "gnu-mlops-endpoint-local"
   compute_config:
     min_workers: 1

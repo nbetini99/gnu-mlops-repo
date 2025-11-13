@@ -1,4 +1,4 @@
-# Databricks MLOps Configuration
+q!# Databricks MLOps Configuration
 databricks:
   host: "https://diba-5e288a33-e706.cloud.databricks.com"
   token: "YOUR_DATABRICKS_ACCESS_TOKEN_HERE"  # Replace with your actual token
@@ -6,7 +6,7 @@ databricks:
 
 # MLflow Configuration
 mlflow:
-  experiment_name: "/Users/nbetini@gmail.com/gnu-mlops/experiments"
+  gnu_mlflow_config: "/Users/nbetini@gmail.com/gnu-mlops/experiments"
   model_name: "gnu-mlops-model"
   tracking_uri: "databricks"
 
@@ -37,7 +37,7 @@ data:
   
 # Deployment Configuration
 deployment:
-  model_stage: "Production"  # Options: Staging, Production
+  model_stage: "GNU_Production"  # Options: Staging, GNU_Production
   endpoint_name: "gnu-mlops-endpoint"
   compute_config:
     min_workers: 1

@@ -63,11 +63,11 @@ class MLModelTrainer:
         mlflow.set_tracking_uri(tracking_uri)
         
         # Set up experiment for organizing runs
-        experiment_name = self.config['mlflow']['experiment_name']
-        mlflow.set_experiment(experiment_name)
+        gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
+        mlflow.set_experiment(gnu_mlflow_config)
         
         logger.info(f"Training pipeline initialized")
-        logger.info(f"→ Experiment: {experiment_name}")
+        logger.info(f"→ Experiment: {gnu_mlflow_config}")
         logger.info(f"→ Tracking: {tracking_uri}")
     
     def load_data(self):

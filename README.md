@@ -88,7 +88,7 @@ databricks:
   workspace_path: "/Users/nbetini@gmail.com/gnu-mlops/liveprod"
 
 mlflow:
-  experiment_name: "/Users/nbetini@gmail.com/gnu-mlops/experiments"
+  gnu_mlflow_config: "/Users/nbetini@gmail.com/gnu-mlops/experiments"
   model_name: "gnu-mlops-model"
 
 model:

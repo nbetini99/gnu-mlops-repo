@@ -71,7 +71,7 @@ class ModelDeployment:
             logger.warning(f"Model validation failed. Accuracy: {accuracy:.4f} < {threshold}")
             return False
     
-    def transition_model_stage(self, version, stage="Production"):
+    def transition_model_stage(self, version, stage="GNU_Production"):
         """Transition model to a specific stage"""
         try:
             logger.info(f"Transitioning model version {version} to {stage}...")
@@ -130,7 +130,7 @@ class ModelDeployment:
     
     def deploy_to_production(self, version=None):
         """Deploy model to production environment"""
-        logger.info("Deploying model to Production...")
+        logger.info("Deploying model to GNU_Production...")
         
         if version is None:
             # Get latest staging model
@@ -154,13 +154,13 @@ class ModelDeployment:
             return False
         
         # Transition to production
-        self.transition_model_stage(version, "Production")
+        self.transition_model_stage(version, "GNU_Production")
         self.add_model_description(
             version,
-            f"Deployed to Production - Accuracy: {metrics.get('accuracy', 0):.4f} - {datetime.now()}"
+            f"Deployed to GNU_Production - Accuracy: {metrics.get('accuracy', 0):.4f} - {datetime.now()}"
         )
         
-        logger.info(f"Model version {version} deployed to Production")
+        logger.info(f"Model version {version} deployed to GNU_Production")
         return version
     
     def rollback_production(self, target_version=None):
@@ -170,14 +170,14 @@ class ModelDeployment:
         try:
             if target_version:
                 # Rollback to specific version
-                self.transition_model_stage(target_version, "Production")
+                self.transition_model_stage(target_version, "GNU_Production")
                 logger.info(f"Rolled back to version {target_version}")
             else:
                 # Get all production versions
                 prod_versions = self.client.search_model_versions(
                     f"name='{self.model_name}'"
                 )
-                prod_versions = [v for v in prod_versions if v.current_stage == "Production"]
+                prod_versions = [v for v in prod_versions if v.current_stage == "GNU_Production"]
                 
                 if len(prod_versions) < 2:
                     logger.warning("No previous version available for rollback")
@@ -187,7 +187,7 @@ class ModelDeployment:
                 prod_versions.sort(key=lambda x: int(x.version), reverse=True)
                 previous_version = prod_versions[1].version
                 
-                self.transition_model_stage(previous_version, "Production")
+                self.transition_model_stage(previous_version, "GNU_Production")
                 logger.info(f"Rolled back to version {previous_version}")
             
             return True
@@ -200,11 +200,11 @@ class ModelDeployment:
         try:
             prod_versions = self.client.get_latest_versions(
                 self.model_name,
-                stages=["Production"]
+                stages=["GNU_Production"]
             )
             
             if not prod_versions:
-                logger.info("No model currently in Production")
+                logger.info("No model currently in GNU_Production")
                 return None
             
             prod_model = prod_versions[0]
@@ -256,15 +256,15 @@ def main():
         elif args.stage == 'production':
             version = deployer.deploy_to_production(args.version)
             if version:
-                print(f"\n✓ Model version {version} deployed to Production")
+                print(f"\n✓ Model version {version} deployed to GNU_Production")
             else:
-                print("\n✗ Production deployment failed")
+                print("\n✗ GNU_Production deployment failed")
         
         elif args.stage == 'info':
             info = deployer.get_production_model_info()
             if info:
                 print("\n" + "="*50)
-                print("Production Model Information")
+                print("GNU_Production Model Information")
                 print("="*50)
                 for key, value in info.items():
                     print(f"{key}: {value}")
@@ -273,7 +273,7 @@ def main():
         elif args.stage == 'rollback':
             success = deployer.rollback_production(args.version)
             if success:
-                print("\n✓ Production model rolled back successfully")
+                print("\n✓ GNU_Production model rolled back successfully")
             else:
                 print("\n✗ Rollback failed")
     
