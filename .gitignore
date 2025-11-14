@@ -95,3 +95,16 @@ PRODUCTION_CHANGE_SUMMARY.md
 LOCAL_RUN_GUIDE.md
 RUN_COMMANDS.sh
 SIMPLE_COMMANDS.txt
+# Dataset files
+create_datasets.py
+simple_training_data.csv
+training_data.csv
+test_data.csv
+test_samples.csv
+DATASET_README.txt
+DATASET_USAGE_EXAMPLES.md
+DOCUMENTATION_ENHANCEMENT_SUMMARY.md
+LOCAL_PRODUCTION_DEPLOYMENT.md
+AUTOMATIC_RETRAINING_GUIDE.md
+BATCH_INFERENCE_GUIDE.md
+*.zip

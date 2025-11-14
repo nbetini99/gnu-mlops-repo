@@ -287,63 +287,122 @@ class MLModelTrainer:
         return performance_metrics
     
     def run_training_pipeline(self):
-        """Execute the complete training pipeline with MLflow tracking"""
+        """
+        Execute the complete end-to-end training pipeline with comprehensive MLflow tracking
         
+        This is the main orchestration method that coordinates all training steps:
+        1. Data loading from configured source
+        2. Data preprocessing and feature engineering
+        3. Model training with cross-validation
+        4. Model evaluation on test set
+        5. Logging all artifacts and metrics to MLflow
+        6. Registering model in Model Registry
+        
+        Returns:
+            tuple: (run_id, metrics_dict)
+                - run_id: Unique identifier for this MLflow run
+                - metrics_dict: Dictionary containing all evaluation metrics
+                
+        Raises:
+            Exception: If any step in the pipeline fails
+            
+        Example:
+            >>> trainer = MLModelTrainer()
+            >>> run_id, metrics = trainer.run_training_pipeline()
+            >>> print(f"Accuracy: {metrics['accuracy']:.4f}")
+        """
+        # Start MLflow run context - automatically closes on completion or error
         with mlflow.start_run() as run:
             logger.info(f"Started MLflow run: {run.info.run_id}")
             
-            # Log parameters
+            # ===== STEP 1: Log Training Parameters =====
+            # Record all hyperparameters for reproducibility
             mlflow.log_params(self.config['model']['hyperparameters'])
             mlflow.log_param("test_size", self.config['training']['test_size'])
             mlflow.log_param("cv_folds", self.config['training']['cv_folds'])
             
-            # Load and preprocess data
+            # ===== STEP 2: Load and Preprocess Data =====
+            # Fetch data from Databricks or generate synthetic data for local testing
             df = self.load_data()
+            
+            # Clean data, split into train/test, and normalize features
+            # This prevents data leakage by fitting scaler only on training data
             X_train, X_test, y_train, y_test, scaler = self.preprocess_data(df)
             
-            # Train model
+            # ===== STEP 3: Train Model with Cross-Validation =====
+            # Build and train the ML model, validating with k-fold CV
             model, cv_scores = self.train_model(X_train, y_train)
             
-            # Log cross-validation metrics
+            # Log cross-validation results for model comparison
+            # These metrics help identify overfitting before test evaluation
             mlflow.log_metric("cv_mean_accuracy", cv_scores.mean())
             mlflow.log_metric("cv_std_accuracy", cv_scores.std())
             
-            # Evaluate model
+            # ===== STEP 4: Evaluate on Test Set =====
+            # Assess final model performance on unseen test data
             metrics = self.evaluate_model(model, X_test, y_test)
             
-            # Log evaluation metrics
+            # Log all evaluation metrics to MLflow for tracking and comparison
             for metric_name, metric_value in metrics.items():
                 mlflow.log_metric(metric_name, metric_value)
             
-            # Log model
+            # ===== STEP 5: Log Model to MLflow =====
+            # Save trained model in MLflow format
+            # This automatically registers the model in Model Registry
+            # The model can now be deployed to Staging or GNU_Production
             mlflow.sklearn.log_model(
                 model,
                 "model",
                 registered_model_name=self.config['mlflow']['model_name']
             )
             
-            # Log scaler as artifact
+            # ===== STEP 6: Log Preprocessing Artifacts =====
+            # Save the feature scaler so predictions use the same normalization
+            # Critical: Predictions must use the SAME scaler as training
             import joblib
             scaler_path = "scaler.pkl"
             joblib.dump(scaler, scaler_path)
-            mlflow.log_artifact(scaler_path)
-            os.remove(scaler_path)
+            mlflow.log_artifact(scaler_path)  # Upload to MLflow
+            os.remove(scaler_path)  # Clean up temporary file
             
-            # Log config
+            # ===== STEP 7: Log Configuration for Reproducibility =====
+            # Save config file so we know exactly what settings were used
             mlflow.log_artifact('config.yaml')
             
+            # ===== STEP 8: Complete and Return Results =====
             logger.info(f"Model training completed. Run ID: {run.info.run_id}")
             logger.info(f"Model registered as: {self.config['mlflow']['model_name']}")
             
+            # Return run ID for tracking and metrics for evaluation
             return run.info.run_id, metrics
 
 
 def main():
-    """Main execution function"""
+    """
+    Main execution function for standalone script usage
+    
+    This function serves as the entry point when running the script directly.
+    It handles initialization, execution, and error reporting.
+    
+    Workflow:
+        1. Initialize the training pipeline
+        2. Execute complete training workflow
+        3. Display results to user
+        4. Handle any errors gracefully
+        
+    Raises:
+        Exception: Propagates any errors from training pipeline
+    """
     try:
+        # Initialize trainer with default config
+        # Will use config.local.yaml if it exists, otherwise config.yaml
         trainer = MLModelTrainer()
+        
+        # Run the complete training pipeline
+        # This handles: data loading, preprocessing, training, evaluation, and logging
         run_id, metrics = trainer.run_training_pipeline()
         
+        # ===== Display Success Message =====
         print("\n" + "="*50)
         print("Training Completed Successfully!")
         print("="*50)
@@ -353,10 +412,12 @@ def main():
         print("="*50)
         
     except Exception as e:
+        # Log error and re-raise for visibility
         logger.error(f"Training failed: {str(e)}")
         raise
 
 
+# Script entry point - only executes if run directly (not when imported)
 if __name__ == "__main__":
     main()
 

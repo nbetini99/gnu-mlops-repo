@@ -50,3 +50,22 @@ monitoring:
   log_predictions: true
   alert_email: "nbetini@gmail.com"
 
+# Retraining Configuration
+retraining:
+  enabled: true  # Enable automatic retraining
+  interval_days: 30  # Retrain every 30 days
+  auto_deploy: true  # Automatically deploy if new model is better
+  min_improvement: 0.0  # Minimum accuracy improvement to deploy (0.0 = any improvement)
+  notification_email: "nbetini@gmail.com"  # Email for retraining notifications
+
+# Batch Inference Configuration
+batch_inference:
+  enabled: true  # Enable daily batch inference
+  input_path: "data/batch_input/"  # Path to input data files (file or directory)
+  output_path: "data/batch_output/"  # Path to save prediction results
+  archive_path: "data/batch_archive/"  # Path to archive processed input files
+  model_stage: "GNU_Production"  # Model stage to use (Staging or GNU_Production)
+  batch_size: 10000  # Process large files in batches of this size
+  archive_input: true  # Archive input files after processing
+  notification_email: "nbetini@gmail.com"  # Email for batch inference notifications
+
