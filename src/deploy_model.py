@@ -72,10 +72,28 @@ class ModelDeployment:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Set up MLflow tracking connection
-        # Priority: Environment variable > config file value
-        # This allows overriding config for different environments
-        tracking_uri = os.getenv('MLFLOW_TRACKING_URI', self.config['mlflow']['tracking_uri'])
+        # Set up MLflow tracking connection with intelligent fallback
+        # Check if Databricks credentials are available
+        databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
+        databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
+        
+        config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
+        env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
+        
+        # Determine tracking URI with fallback
+        if env_tracking_uri and (env_tracking_uri.startswith('sqlite:///') or env_tracking_uri.startswith('file:///')):
+            tracking_uri = env_tracking_uri
+        elif (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks'):
+            if databricks_host and databricks_token and databricks_token not in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
+                tracking_uri = 'databricks'
+            else:
+                logger.warning("Databricks tracking URI specified but credentials not available, using SQLite")
+                tracking_uri = 'sqlite:///mlflow.db'
+        elif env_tracking_uri:
+            tracking_uri = env_tracking_uri
+        else:
+            tracking_uri = config_tracking_uri if config_tracking_uri != 'databricks' else 'sqlite:///mlflow.db'
+        
         mlflow.set_tracking_uri(tracking_uri)
         
         # Initialize MLflow client for model registry operations

@@ -1,14 +1,23 @@
 # Databricks MLOps Configuration
+# SECURITY NOTE: Credentials are read from environment variables for security
+# Set these in GitHub Secrets or local .env file:
+#   DATABRICKS_HOST - Databricks workspace URL (required for Databricks mode)
+#   DATABRICKS_TOKEN - Databricks access token (required for Databricks mode)
+#   DATABRICKS_WORKSPACE_PATH - Workspace path (optional, defaults below)
+#   DATABRICKS_EXPERIMENT_PATH - MLflow experiment path (optional, defaults below)
+#
+# The code automatically reads from environment variables and overrides these values
+# These values are only used as defaults if environment variables are not set
 databricks:
-  host: "https://diba-5e288a33-e706.cloud.databricks.com"
-  token: "YOUR_DATABRICKS_ACCESS_TOKEN_HERE"  # Replace with your actual token
-  workspace_path: "/Users/nbetini@gmail.com/gnu-mlops/liveprod"
+  host: "https://dbc-5e289a33-a706.cloud.databricks.com"  # Default - overridden by DATABRICKS_HOST env var
+  token: ""  # Must be set via DATABRICKS_TOKEN environment variable (NEVER hardcode!)
+  workspace_path: "/Users/nbatink@gmail.com/gnu-mlops/liveprod"  # Default - overridden by DATABRICKS_WORKSPACE_PATH env var
 
 # MLflow Configuration
 mlflow:
-  gnu_mlflow_config: "/Users/nbetini@gmail.com/gnu-mlops/experiments"
+  gnu_mlflow_config: "/Users/nbatink@gmail.com/gnu-mlops/experiments"  # Default - overridden by DATABRICKS_EXPERIMENT_PATH env var
   model_name: "gnu-mlops-model"
-  tracking_uri: "databricks"
+  tracking_uri: "databricks"  # Can be overridden via MLFLOW_TRACKING_URI env var
 
 # Model Configuration
 model:

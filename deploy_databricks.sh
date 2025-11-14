@@ -9,14 +9,43 @@ echo "GNU MLOps - Databricks Deployment"
 echo "========================================="
 echo ""
 
-# Set Databricks credentials
-export DATABRICKS_HOST="https://diba-5e288a33-e706.cloud.databricks.com"
-export DATABRICKS_TOKEN="dapicb7282387c50cc9aa3e8e3d18378b5fd"
-export MLFLOW_TRACKING_URI="databricks"
+# SECURITY: Read Databricks credentials from environment variables
+# NEVER hardcode credentials in scripts!
+# Set these in your environment or .env file:
+#   export DATABRICKS_HOST="https://dbc-5e289a33-a706.cloud.databricks.com"
+#   export DATABRICKS_TOKEN="your-token-here"
+#   export DATABRICKS_WORKSPACE_PATH="/Users/nbatink@gmail.com/gnu-mlops/liveprod"  # Optional
+#   export DATABRICKS_EXPERIMENT_PATH="/Users/nbatink@gmail.com/gnu-mlops/experiments"  # Optional
 
-echo "✓ Databricks credentials configured"
+# Check if credentials are set
+if [ -z "$DATABRICKS_HOST" ] || [ -z "$DATABRICKS_TOKEN" ]; then
+    echo "✗ Error: DATABRICKS_HOST and DATABRICKS_TOKEN must be set"
+    echo ""
+    echo "Please set these environment variables:"
+    echo "  export DATABRICKS_HOST='https://dbc-5e289a33-a706.cloud.databricks.com'"
+    echo "  export DATABRICKS_TOKEN='your-token-here'"
+    echo ""
+    echo "Or create a .env file with:"
+    echo "  DATABRICKS_HOST=https://dbc-5e289a33-a706.cloud.databricks.com"
+    echo "  DATABRICKS_TOKEN=your-token-here"
+    echo ""
+    echo "Then source it:"
+    echo "  source .env"
+    exit 1
+fi
+
+# Set MLflow tracking URI
+export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-databricks}"
+
+# Set optional paths if not already set
+export DATABRICKS_WORKSPACE_PATH="${DATABRICKS_WORKSPACE_PATH:-/Users/nbatink@gmail.com/gnu-mlops/liveprod}"
+export DATABRICKS_EXPERIMENT_PATH="${DATABRICKS_EXPERIMENT_PATH:-/Users/nbatink@gmail.com/gnu-mlops/experiments}"
+
+echo "✓ Databricks credentials configured from environment variables"
 echo "  Host: $DATABRICKS_HOST"
 echo "  Token: ${DATABRICKS_TOKEN:0:15}..."
+echo "  Workspace Path: $DATABRICKS_WORKSPACE_PATH"
+echo "  Experiment Path: $DATABRICKS_EXPERIMENT_PATH"
 echo ""
 
 # Activate virtual environment
@@ -87,6 +116,6 @@ echo "  2. Validate model performance"
 echo "  3. Deploy to production:"
 echo "     python3 src/deploy_model.py --stage production"
 echo ""
-echo "MLflow UI: https://diba-5e288a33-e706.cloud.databricks.com/#mlflow"
+echo "MLflow UI: https://dbc-5e289a33-a706.cloud.databricks.com/#mlflow"
 echo ""
 

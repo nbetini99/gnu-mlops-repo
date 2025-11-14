@@ -21,9 +21,9 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
-from databricks import sql
 import logging
 from pathlib import Path
+import sys
 
 # Setup logging with custom format
 logging.basicConfig(
@@ -31,6 +31,73 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _validate_databricks_credentials():
+    """
+    Check if Databricks credentials are available and valid
+    
+    Returns:
+        bool: True if Databricks credentials are available, False otherwise
+    """
+    databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
+    databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
+    
+    if not databricks_host or not databricks_token:
+        return False
+    
+    # Check if credentials are not placeholders
+    if databricks_token in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
+        return False
+    
+    return True
+
+
+def _get_mlflow_tracking_uri(config_tracking_uri):
+    """
+    Determine the appropriate MLflow tracking URI with automatic fallback
+    
+    Priority:
+    1. MLFLOW_TRACKING_URI environment variable (if set and valid)
+    2. Databricks (if credentials available and config says databricks)
+    3. SQLite fallback (local mode)
+    
+    Args:
+        config_tracking_uri: Tracking URI from config file
+        
+    Returns:
+        str: MLflow tracking URI to use
+    """
+    # Check environment variable first
+    env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
+    
+    # If explicitly set to SQLite or file path, use it
+    if env_tracking_uri and (env_tracking_uri.startswith('sqlite:///') or 
+                             env_tracking_uri.startswith('file:///')):
+        logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
+        return env_tracking_uri
+    
+    # If explicitly set to databricks, validate credentials
+    if env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks':
+        if _validate_databricks_credentials():
+            logger.info("Databricks credentials available, using Databricks MLflow tracking")
+            return 'databricks'
+        else:
+            logger.warning("Databricks tracking URI specified but credentials not available")
+            logger.info("Falling back to SQLite for local tracking")
+            return 'sqlite:///mlflow.db'
+    
+    # If environment variable is set, use it
+    if env_tracking_uri:
+        logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
+        return env_tracking_uri
+    
+    # Default to SQLite for local development
+    if not config_tracking_uri or config_tracking_uri == 'databricks':
+        logger.info("Using SQLite for local MLflow tracking")
+        return 'sqlite:///mlflow.db'
+    
+    return config_tracking_uri
 
 
 class MLModelTrainer:
@@ -57,18 +124,78 @@ class MLModelTrainer:
         with open(config_file, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Initialize MLflow connection
-        # Priority: environment variable > config file > default
-        tracking_uri = os.getenv('MLFLOW_TRACKING_URI') or self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
+        # Override config values from environment variables (secure credential management)
+        # This ensures credentials are never hardcoded in config files
+        if 'databricks' in self.config:
+            # Override Databricks host from environment variable
+            self.config['databricks']['host'] = os.getenv(
+                'DATABRICKS_HOST',
+                self.config['databricks'].get('host', '')
+            )
+            # Override Databricks token from environment variable (required for security)
+            self.config['databricks']['token'] = os.getenv(
+                'DATABRICKS_TOKEN',
+                self.config['databricks'].get('token', '')
+            )
+            # Override workspace path from environment variable
+            self.config['databricks']['workspace_path'] = os.getenv(
+                'DATABRICKS_WORKSPACE_PATH',
+                self.config['databricks'].get('workspace_path', '')
+            )
+        
+        # Override MLflow experiment path from environment variable
+        if 'mlflow' in self.config:
+            self.config['mlflow']['gnu_mlflow_config'] = os.getenv(
+                'DATABRICKS_EXPERIMENT_PATH',
+                self.config['mlflow'].get('gnu_mlflow_config', 'gnu-mlops-experiments')
+            )
+        
+        # Initialize MLflow connection with intelligent fallback
+        # This handles both local and Databricks scenarios gracefully
+        config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
+        tracking_uri = _get_mlflow_tracking_uri(config_tracking_uri)
+        
+        # Set tracking URI (fallback already handled in _get_mlflow_tracking_uri)
         mlflow.set_tracking_uri(tracking_uri)
         
         # Set up experiment for organizing runs
+        # Use a local-friendly experiment name if using SQLite
         gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
-        mlflow.set_experiment(gnu_mlflow_config)
+        
+        # If using SQLite and experiment path looks like Databricks path, use simpler name
+        if tracking_uri.startswith('sqlite:///') and (gnu_mlflow_config.startswith('/Users/') or 
+                                                       gnu_mlflow_config.startswith('/')):
+            # Extract experiment name from path or use default
+            # Remove leading/trailing slashes and get last non-empty component
+            path_parts = [p for p in gnu_mlflow_config.strip('/').split('/') if p]
+            if path_parts:
+                experiment_name = path_parts[-1]
+            else:
+                experiment_name = 'gnu-mlops-experiments'
+            
+            logger.info(f"Using local experiment name: {experiment_name} (from {gnu_mlflow_config})")
+            try:
+                mlflow.set_experiment(experiment_name)
+                gnu_mlflow_config = experiment_name  # Update for logging
+            except Exception as e:
+                logger.warning(f"Could not set experiment {experiment_name}: {e}, using default")
+                mlflow.set_experiment("gnu-mlops-experiments")
+                gnu_mlflow_config = "gnu-mlops-experiments"
+        else:
+            try:
+                mlflow.set_experiment(gnu_mlflow_config)
+            except Exception as e:
+                logger.warning(f"Could not set experiment {gnu_mlflow_config}: {e}")
+                # Fallback to default experiment name
+                mlflow.set_experiment("gnu-mlops-experiments")
+                gnu_mlflow_config = "gnu-mlops-experiments"
         
         logger.info(f"Training pipeline initialized")
         logger.info(f"→ Experiment: {gnu_mlflow_config}")
         logger.info(f"→ Tracking: {tracking_uri}")
+        
+        # Store tracking URI for later use
+        self.tracking_uri = tracking_uri
     
     def load_data(self):
         """
@@ -367,7 +494,13 @@ class MLModelTrainer:
             
             # ===== STEP 7: Log Configuration for Reproducibility =====
             # Save config file so we know exactly what settings were used
-            mlflow.log_artifact('config.yaml')
+            # Only log if file exists (might not exist in all environments)
+            config_file_path = Path('config.yaml')
+            if config_file_path.exists():
+                try:
+                    mlflow.log_artifact(str(config_file_path))
+                except Exception as e:
+                    logger.warning(f"Could not log config file: {e}")
             
             # ===== STEP 8: Complete and Return Results =====
             logger.info(f"Model training completed. Run ID: {run.info.run_id}")
