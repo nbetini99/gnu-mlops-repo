@@ -1,0 +1,50 @@
+╔══════════════════════════════════════════════════════════════╗
+║     FINAL SETUP INSTRUCTIONS - GITHUB SECRETS               ║
+╚══════════════════════════════════════════════════════════════╝
+
+⚠️  IMPORTANT: GitHub requires Personal Access Token (not password)
+
+📋 STEP 1: CREATE PERSONAL ACCESS TOKEN
+───────────────────────────────────────────────────────────────
+1. Token page should be open in your browser
+   If not: https://github.com/settings/tokens/new
+
+2. Fill in:
+   - Note: "GNU MLOps Secrets Setup"
+   - Expiration: 90 days
+   - Scope: ✅ repo (Full control)
+
+3. Click "Generate token"
+
+4. ⚠️ COPY THE TOKEN IMMEDIATELY (you won't see it again!)
+
+📋 STEP 2: RUN AUTOMATED SETUP
+───────────────────────────────────────────────────────────────
+Run this command:
+  ./setup_secrets_now.sh
+
+Enter your token when prompted.
+
+All secrets will be set automatically!
+
+📋 ALTERNATIVE: MANUAL SETUP
+───────────────────────────────────────────────────────────────
+Go to: https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+
+Add these secrets (click "New repository secret" for each):
+
+Required:
+  • DATABRICKS_HOST: https://dbc-5e289a33-a706.cloud.databricks.com
+  • DATABRICKS_TOKEN: dapicb7282387c50cc9aa3e8e3d18378b5fd
+
+Optional:
+  • DATABRICKS_WORKSPACE_PATH: /Users/nbatink@gmail.com/gnu-mlops/liveprod
+  • DATABRICKS_EXPERIMENT_PATH: /Users/nbatink@gmail.com/gnu-mlops/experiments
+
+✅ VERIFICATION
+───────────────────────────────────────────────────────────────
+1. Check secrets are listed on secrets page
+2. Go to Actions tab
+3. Trigger a workflow
+4. Check logs for: "✓ Databricks credentials found in GitHub Secrets"
+
