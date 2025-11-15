@@ -603,13 +603,16 @@ def main():
     - rollback: Revert production to previous version
     
     Command-line Arguments:
-        --stage: Required. One of [staging, production, info, rollback]
+        --stage: Required. One of [staging, production, GNU_Production, info, rollback]
+                 Note: 'production' and 'GNU_Production' are equivalent
         --version: Optional. Specific model version number
         
     Usage Examples:
         python src/deploy_model.py --stage staging
         python src/deploy_model.py --stage production
+        python src/deploy_model.py --stage GNU_Production
         python src/deploy_model.py --stage production --version 5
+        python src/deploy_model.py --stage GNU_Production --version 5
         python src/deploy_model.py --stage info
         python src/deploy_model.py --stage rollback
         python src/deploy_model.py --stage rollback --version 3
@@ -628,9 +631,9 @@ def main():
     parser.add_argument(
         '--stage',
         type=str,
-        choices=['staging', 'production', 'info', 'rollback'],
+        choices=['staging', 'production', 'GNU_Production', 'info', 'rollback'],
         required=True,
-        help='Deployment stage or action to perform'
+        help='Deployment stage or action to perform (production and GNU_Production are equivalent)'
     )
     
     # Optional: specific version number
@@ -654,9 +657,10 @@ def main():
             version = deployer.deploy_to_staging()
             print(f"\n✓ Model version {version} deployed to Staging")
         
-        elif args.stage == 'production':
+        elif args.stage in ['production', 'GNU_Production']:
             # Deploy to GNU_Production (from Staging or specific version)
             # Validates model meets 80% accuracy threshold
+            # Both 'production' and 'GNU_Production' are accepted for compatibility
             version = deployer.deploy_to_production(args.version)
             
             if version:
