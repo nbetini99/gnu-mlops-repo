@@ -1,0 +1,134 @@
+╔══════════════════════════════════════════════════════════════╗
+║     GITHUB TOKEN SETUP - QUICK REFERENCE                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: CREATE PERSONAL ACCESS TOKEN
+───────────────────────────────────────────────────────────────
+
+🔗 DIRECT LINK:
+   https://github.com/settings/tokens/new
+
+📝 STEPS:
+   1. Click the link above (or go to GitHub → Settings → Developer settings → Personal access tokens)
+   2. Click "Generate new token" → "Generate new token (classic)"
+   3. Fill in:
+      • Note: "GNU MLOps Secrets Setup"
+      • Expiration: 90 days
+      • Scope: ✅ repo (Full control)
+   4. Click "Generate token"
+   5. ⚠️ COPY THE TOKEN IMMEDIATELY (you won't see it again!)
+
+📋 STEP 2: USE TOKEN TO SET UP SECRETS
+───────────────────────────────────────────────────────────────
+
+🚀 AUTOMATED SETUP (RECOMMENDED):
+   Run this command:
+     ./QUICK_START_SETUP.sh
+   
+   Enter your token when prompted.
+   All secrets will be set automatically!
+
+📝 MANUAL SETUP:
+   1. Go to: https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+   2. Click "New repository secret" for each:
+      • DATABRICKS_HOST: https://dbc-5e289a33-a706.cloud.databricks.com
+      • DATABRICKS_TOKEN: dapicb7282387c50cc9aa3e8e3d18378b5fd
+      • DATABRICKS_WORKSPACE_PATH: /Users/nbatink@gmail.com/gnu-mlops/liveprod
+      • DATABRICKS_EXPERIMENT_PATH: /Users/nbatink@gmail.com/gnu-mlops/experiments
+
+🔧 USING ENVIRONMENT VARIABLE:
+   export GITHUB_TOKEN=your_token_here
+   python3 setup_secrets_with_auth.py --token $GITHUB_TOKEN --username nbetini99
+
+✅ STEP 3: VERIFY SETUP
+───────────────────────────────────────────────────────────────
+
+🔗 CHECK SECRETS:
+   https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+
+🔗 TEST WORKFLOW:
+   https://github.com/nbetini99/gnu-mlops-repo/actions
+
+📝 VERIFY:
+   1. Check secrets page: All secrets should be listed
+   2. Go to Actions tab: Trigger a workflow
+   3. Check logs: Look for "✓ Databricks credentials found in GitHub Secrets"
+
+🔍 TROUBLESHOOTING
+───────────────────────────────────────────────────────────────
+
+❌ "Invalid token":
+   • Verify token is correct
+   • Check token expiration
+   • Create a new token if needed
+
+❌ "Access forbidden":
+   • Verify you have admin access
+   • Check token scope (needs "repo")
+   • Verify repository settings
+
+❌ "Connection failed":
+   • Check network connectivity
+   • Verify GitHub API is accessible
+   • Check firewall/proxy settings
+
+📚 USEFUL LINKS
+───────────────────────────────────────────────────────────────
+
+🔗 Create Token: https://github.com/settings/tokens/new
+🔗 View Tokens: https://github.com/settings/tokens
+🔗 Repository Secrets: https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+🔗 GitHub Actions: https://github.com/nbetini99/gnu-mlops-repo/actions
+🔗 GitHub Status: https://www.githubstatus.com
+
+🔒 SECURITY NOTES
+───────────────────────────────────────────────────────────────
+
+✅ DO:
+   • Use Personal Access Tokens (not passwords)
+   • Store tokens securely (password manager)
+   • Use minimal scopes (only "repo")
+   • Rotate tokens regularly (every 90 days)
+
+❌ DON'T:
+   • Don't share tokens with anyone
+   • Don't commit tokens to repositories
+   • Don't use tokens in public places
+   • Don't use expired tokens
+
+📋 QUICK COMMANDS
+───────────────────────────────────────────────────────────────
+
+# Create token (open in browser)
+open "https://github.com/settings/tokens/new"
+
+# Run automated setup
+./QUICK_START_SETUP.sh
+
+# Check secrets page
+open "https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions"
+
+# Test workflow
+open "https://github.com/nbetini99/gnu-mlops-repo/actions"
+
+🎯 SUMMARY
+───────────────────────────────────────────────────────────────
+
+Step 1: Create Token (2 minutes)
+  → https://github.com/settings/tokens/new
+  → Fill in: Note, Expiration, Scope (repo)
+  → Generate and copy token
+
+Step 2: Set Up Secrets (1 minute)
+  → Run: ./QUICK_START_SETUP.sh
+  → Enter token when prompted
+  → Wait for automatic setup
+
+Step 3: Verify Setup (1 minute)
+  → Check secrets page
+  → Test workflow
+  → Verify logs
+
+Total Time: ~5 minutes
+Status: Ready to proceed!
+
