@@ -1,0 +1,186 @@
+╔══════════════════════════════════════════════════════════════╗
+║     DEPLOYMENT QUICK REFERENCE - GNU MLOps                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 THREE DEPLOYMENT METHODS
+───────────────────────────────────────────────────────────────
+
+1. 🖥️  LOCAL MACHINE
+2. ☁️  DATABRICKS
+3. 🔄 GITHUB ACTIONS
+
+───────────────────────────────────────────────────────────────
+
+🖥️  LOCAL DEPLOYMENT
+───────────────────────────────────────────────────────────────
+
+SETUP:
+  git clone https://github.com/nbetini99/gnu-mlops-repo.git
+  cd gnu-mlops-repo
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+
+TRAINING:
+  python src/train_model.py
+
+DEPLOYMENT:
+  python src/deploy_model.py --stage staging
+  python src/deploy_model.py --stage GNU_Production
+
+PREDICTIONS:
+  python src/predict.py --input input.csv --output predictions.csv --stage GNU_Production
+
+MLFLOW UI:
+  mlflow ui --backend-store-uri sqlite:///mlflow.db
+  Open: http://localhost:5000
+
+───────────────────────────────────────────────────────────────
+
+☁️  DATABRICKS DEPLOYMENT
+───────────────────────────────────────────────────────────────
+
+SETUP CREDENTIALS:
+  export DATABRICKS_HOST=https://dbc-5e289a33-a706.cloud.databricks.com
+  export DATABRICKS_TOKEN=dapicb7282387c50cc9aa3e8e3d18378b5fd
+  export DATABRICKS_WORKSPACE_PATH=/Users/nbatink@gmail.com/gnu-mlops/liveprod
+  export DATABRICKS_EXPERIMENT_PATH=/Users/nbatink@gmail.com/gnu-mlops/experiments
+  export MLFLOW_TRACKING_URI=databricks
+
+TRAINING:
+  python src/train_model.py
+
+DEPLOYMENT:
+  python src/deploy_model.py --stage staging
+  python src/deploy_model.py --stage GNU_Production
+
+DEPLOY SCRIPT:
+  ./deploy_databricks.sh
+
+MLFLOW UI:
+  Access via Databricks workspace → MLflow
+  Or: mlflow ui --backend-store-uri databricks
+
+───────────────────────────────────────────────────────────────
+
+🔄 GITHUB ACTIONS DEPLOYMENT
+───────────────────────────────────────────────────────────────
+
+VERIFY SECRETS:
+  https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+  Should have: DATABRICKS_HOST, DATABRICKS_TOKEN, etc.
+
+TRIGGER WORKFLOW - AUTOMATIC:
+  git add .
+  git commit -m "Trigger training"
+  git push origin main
+
+TRIGGER WORKFLOW - MANUAL:
+  1. Go to: https://github.com/nbetini99/gnu-mlops-repo/actions
+  2. Click "Train and Deploy"
+  3. Click "Run workflow"
+  4. Select branch: main
+  5. Click "Run workflow"
+
+MONITOR:
+  https://github.com/nbetini99/gnu-mlops-repo/actions
+  Click on running workflow to see logs
+
+EXPECTED OUTPUT:
+  ✓ Databricks credentials found in GitHub Secrets
+  ✓ Environment configured for Databricks
+  ✓ Model training completed
+  ✓ Model deployed to staging
+  ✓ Model deployed to GNU_Production
+
+───────────────────────────────────────────────────────────────
+
+📋 QUICK COMMANDS REFERENCE
+───────────────────────────────────────────────────────────────
+
+LOCAL:
+  python src/train_model.py
+  python src/deploy_model.py --stage GNU_Production
+  python src/predict.py --input input.csv --output predictions.csv
+
+DATABRICKS:
+  export MLFLOW_TRACKING_URI=databricks
+  python src/train_model.py
+  python src/deploy_model.py --stage GNU_Production
+
+GITHUB ACTIONS:
+  git push origin main  # Auto-triggers workflow
+
+───────────────────────────────────────────────────────────────
+
+🔗 QUICK LINKS
+───────────────────────────────────────────────────────────────
+
+Repository:
+  https://github.com/nbetini99/gnu-mlops-repo
+
+GitHub Actions:
+  https://github.com/nbetini99/gnu-mlops-repo/actions
+
+GitHub Secrets:
+  https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+
+Databricks Workspace:
+  https://dbc-5e289a33-a706.cloud.databricks.com
+
+───────────────────────────────────────────────────────────────
+
+✅ DEPLOYMENT CHECKLIST
+───────────────────────────────────────────────────────────────
+
+LOCAL:
+  [ ] Virtual environment created
+  [ ] Dependencies installed
+  [ ] Training successful
+  [ ] Model deployed to staging
+  [ ] Model deployed to production
+  [ ] Predictions working
+  [ ] MLflow UI accessible
+
+DATABRICKS:
+  [ ] Credentials configured
+  [ ] Connection verified
+  [ ] Training successful
+  [ ] Model deployed to staging
+  [ ] Model deployed to production
+  [ ] MLflow accessible
+
+GITHUB ACTIONS:
+  [ ] Secrets configured
+  [ ] Workflow triggered
+  [ ] Training job completed
+  [ ] Deployment job completed
+  [ ] Model deployed successfully
+
+───────────────────────────────────────────────────────────────
+
+🔍 TROUBLESHOOTING
+───────────────────────────────────────────────────────────────
+
+LOCAL ISSUES:
+  • Module not found → pip install -r requirements.txt
+  • MLflow error → export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+
+DATABRICKS ISSUES:
+  • Auth failed → Verify DATABRICKS_TOKEN
+  • Connection timeout → Check network/firewall
+
+GITHUB ACTIONS ISSUES:
+  • Secrets not found → Check repository secrets
+  • Workflow failed → Check workflow logs
+
+───────────────────────────────────────────────────────────────
+
+📚 DETAILED DOCUMENTATION
+───────────────────────────────────────────────────────────────
+
+For detailed instructions, see:
+  • DEPLOYMENT_GUIDE.md - Complete deployment guide
+  • LOCAL_RUN_GUIDE.md - Local deployment details
+  • GITHUB_SECRETS_SETUP_GUIDE.md - GitHub setup guide
+
