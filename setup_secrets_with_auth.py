@@ -92,7 +92,8 @@ def set_secret(owner, repo, secret_name, encrypted_value, key_id, token):
     
     response = requests.put(url, headers=headers, json=data)
     
-    if response.status_code == 204:
+    # GitHub returns 204 (No Content) or 201 (Created) for successful secret creation
+    if response.status_code in [204, 201]:
         return True
     elif response.status_code == 401:
         print(f"❌ Error: Invalid GitHub token for secret '{secret_name}'")
