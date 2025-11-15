@@ -414,7 +414,7 @@ Automated retraining completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                         logger.warning("  Possible reasons: accuracy < 80% or deployment failed")
                         deployment_info['deployed'] = False
                 else:
-                    logger.warning("Model did not meet Staging threshold (70%)")
+                    logger.warning("Model did not meet Staging threshold (35%)")
                     deployment_info['deployed'] = False
                     
             except Exception as e:

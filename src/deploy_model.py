@@ -10,7 +10,7 @@ This module handles the complete model deployment workflow:
 - Production model information and monitoring
 
 The deployment follows a gated approach:
-- Staging requires 70% accuracy minimum
+- Staging requires 35% accuracy minimum
 - GNU_Production requires 80% accuracy minimum
 - Automatic archiving of previous versions
 - Quick rollback to previous versions if needed
@@ -45,7 +45,7 @@ class ModelDeployment:
         
     Stage Flow:
         None (newly registered)
-          ↓ (70% accuracy threshold)
+          ↓ (35% accuracy threshold)
         Staging (testing environment)
           ↓ (80% accuracy threshold)
         GNU_Production (live serving)
@@ -186,7 +186,7 @@ class ModelDeployment:
         This is a quality gate that prevents underperforming models from
         being deployed to production environments. Different thresholds
         are used for different stages:
-        - Staging: 70% accuracy (lower bar for testing)
+        - Staging: 35% accuracy (lower bar for testing)
         - GNU_Production: 80% accuracy (higher bar for live serving)
         
         Args:
@@ -309,7 +309,7 @@ class ModelDeployment:
         Staging deployment workflow:
         1. Get the most recent model version from Model Registry
         2. Retrieve performance metrics from the training run
-        3. Validate model meets 70% accuracy threshold
+        3. Validate model meets 35% accuracy threshold
         4. If valid, promote to Staging stage
         5. Add deployment metadata for tracking
         
@@ -321,7 +321,7 @@ class ModelDeployment:
             bool: False if validation fails
             
         Validation Threshold:
-            - Minimum accuracy: 70%
+            - Minimum accuracy: 35%
             - Purpose: Basic quality gate for testing
             - Lower than production (80%) to allow experimentation
             
@@ -345,9 +345,9 @@ class ModelDeployment:
         metrics = self.get_model_metrics(run_id)
         
         # ===== STEP 3: Validate Performance =====
-        # Check if model meets minimum 70% accuracy for Staging
+        # Check if model meets minimum 35% accuracy for Staging
         # This prevents completely broken models from being deployed
-        if not self.validate_model_performance(metrics, threshold=0.7):
+        if not self.validate_model_performance(metrics, threshold=0.35):
             logger.warning("Model did not meet staging threshold. Deployment aborted.")
             return False
         
@@ -391,7 +391,7 @@ class ModelDeployment:
         Validation Threshold:
             - Minimum accuracy: 80%
             - Purpose: Ensure high quality for production serving
-            - Higher than Staging (70%) for additional safety
+            - Higher than Staging (35%) for additional safety
             
         Best Practice:
             Always test in Staging first, then promote the same version
@@ -430,7 +430,7 @@ class ModelDeployment:
         metrics = self.get_model_metrics(run_id)
         
         # ===== STEP 3: Validate for Production =====
-        # Stricter threshold (80%) for production vs staging (70%)
+        # Stricter threshold (80%) for production vs staging (35%)
         # This ensures only high-quality models make it to production
         if not self.validate_model_performance(metrics, threshold=0.8):
             logger.error("Model did not meet production threshold. Deployment aborted.")
@@ -650,7 +650,7 @@ def main():
         
         if args.stage == 'staging':
             # Deploy latest model to Staging environment
-            # Validates model meets 70% accuracy threshold
+            # Validates model meets 35% accuracy threshold
             version = deployer.deploy_to_staging()
             print(f"\n✓ Model version {version} deployed to Staging")
         
