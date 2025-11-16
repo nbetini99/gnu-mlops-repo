@@ -332,9 +332,28 @@ class ModelDeployment:
         """
         logger.info("Deploying model to Staging...")
         
+        # ===== STEP 0: Check if Model Exists =====
+        # First, verify the model is registered in MLflow
+        try:
+            self.client.get_registered_model(self.model_name)
+        except Exception as e:
+            if "not found" in str(e).lower() or "RESOURCE_DOES_NOT_EXIST" in str(e):
+                logger.error(f"Model '{self.model_name}' not found in MLflow Model Registry.")
+                logger.error("You need to train a model first before deploying.")
+                logger.info("To train a model, run: python src/train_model.py")
+                return False
+            else:
+                # Re-raise if it's a different error
+                raise
+        
         # ===== STEP 1: Get Latest Model Version =====
         # Find the most recent model in "None" stage (newly trained)
-        version = self.get_latest_model_version()
+        try:
+            version = self.get_latest_model_version()
+        except ValueError as e:
+            logger.error(str(e))
+            logger.info("To train a model, run: python src/train_model.py")
+            return False
         
         # ===== STEP 2: Retrieve Model Metrics =====
         # Get the MLflow run ID associated with this model version
@@ -408,14 +427,32 @@ class ModelDeployment:
         """
         logger.info("Deploying model to GNU_Production...")
         
-        # ===== STEP 1: Determine Which Version to Deploy =====
+        # ===== STEP 1: Check if Model Exists =====
+        # First, verify the model is registered in MLflow
+        try:
+            self.client.get_registered_model(self.model_name)
+        except Exception as e:
+            if "not found" in str(e).lower() or "RESOURCE_DOES_NOT_EXIST" in str(e):
+                logger.error(f"Model '{self.model_name}' not found in MLflow Model Registry.")
+                logger.error("You need to train a model first before deploying.")
+                logger.info("To train a model, run: python src/train_model.py")
+                return False
+            else:
+                # Re-raise if it's a different error
+                raise
+        
+        # ===== STEP 2: Determine Which Version to Deploy =====
         if version is None:
             # No version specified - try to get the current Staging model first
             # This is the recommended path: Staging → Production
-            staging_versions = self.client.get_latest_versions(
-                self.model_name,
-                stages=["Staging"]
-            )
+            try:
+                staging_versions = self.client.get_latest_versions(
+                    self.model_name,
+                    stages=["Staging"]
+                )
+            except Exception as e:
+                logger.error(f"Error checking Staging models: {str(e)}")
+                staging_versions = []
             
             if staging_versions:
                 # Use the Staging model version (recommended path)
@@ -439,11 +476,14 @@ class ModelDeployment:
                         logger.info(f"Using latest model from None stage: version {version}")
                         logger.warning("⚠️  Skipping Staging. Direct deployment to Production is not recommended.")
                     else:
-                        logger.error("No model versions found in None stage. Train a model first.")
+                        logger.error("No model versions found in None stage.")
+                        logger.error("You need to train a model first before deploying.")
+                        logger.info("To train a model, run: python src/train_model.py")
                         return False
                 except Exception as e:
                     logger.error(f"Error getting model from None stage: {str(e)}")
                     logger.error("Train a model first or deploy to Staging.")
+                    logger.info("To train a model, run: python src/train_model.py")
                     return False
         
         # ===== STEP 2: Retrieve Model Metrics =====
@@ -695,9 +735,11 @@ def main():
             else:
                 print("\n✗ GNU_Production deployment failed")
                 print("   Possible reasons:")
+                print("   - Model not found (train a model first: python src/train_model.py)")
                 print("   - Model accuracy < 40%")
-                print("   - No model in Staging")
+                print("   - No model in Staging or None stage")
                 print("   - Specified version doesn't exist")
+                print("\n   💡 Tip: Train a model first with: python src/train_model.py")
         
         elif args.stage == 'info':
             # Display current production model information
