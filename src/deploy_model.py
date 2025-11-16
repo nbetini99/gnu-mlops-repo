@@ -243,6 +243,10 @@ class ModelDeployment:
             >>> # Version 3 is now in Staging, ready for testing
         """
         try:
+            # Map "GNU_Production" to "Production" for MLflow compatibility
+            # MLflow only accepts: None, Staging, Production, Archived
+            mlflow_stage = "Production" if stage == "GNU_Production" else stage
+            
             logger.info(f"Transitioning model version {version} to {stage}...")
             
             # Perform the stage transition in MLflow Model Registry
@@ -250,7 +254,7 @@ class ModelDeployment:
             self.client.transition_model_version_stage(
                 name=self.model_name,
                 version=version,
-                stage=stage,
+                stage=mlflow_stage,  # Use MLflow-compatible stage name
                 archive_existing_versions=True  # Archive previous versions in this stage
             )
             
@@ -568,8 +572,9 @@ class ModelDeployment:
                     f"name='{self.model_name}'"
                 )
                 
-                # Filter to only versions currently in GNU_Production
-                prod_versions = [v for v in prod_versions if v.current_stage == "GNU_Production"]
+                # Filter to only versions currently in Production
+                # Note: MLflow stores stage as "Production", not "GNU_Production"
+                prod_versions = [v for v in prod_versions if v.current_stage == "Production"]
                 
                 # Check if we have a previous version to rollback to
                 if len(prod_versions) < 2:
@@ -623,10 +628,11 @@ class ModelDeployment:
             >>>     print(f"Accuracy: {info['metrics']['accuracy']:.4f}")
         """
         try:
-            # Query MLflow for models in GNU_Production stage
+            # Query MLflow for models in Production stage
+            # Note: MLflow uses "Production", not "GNU_Production"
             prod_versions = self.client.get_latest_versions(
                 self.model_name,
-                stages=["GNU_Production"]
+                stages=["Production"]  # MLflow stage name (maps to our "GNU_Production")
             )
             
             # Check if any model is deployed to production
