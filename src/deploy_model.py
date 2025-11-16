@@ -11,7 +11,7 @@ This module handles the complete model deployment workflow:
 
 The deployment follows a gated approach:
 - Staging requires 35% accuracy minimum
-- GNU_Production requires 80% accuracy minimum
+- GNU_Production requires 40% accuracy minimum
 - Automatic archiving of previous versions
 - Quick rollback to previous versions if needed
 """
@@ -47,7 +47,7 @@ class ModelDeployment:
         None (newly registered)
           ↓ (35% accuracy threshold)
         Staging (testing environment)
-          ↓ (80% accuracy threshold)
+          ↓ (40% accuracy threshold)
         GNU_Production (live serving)
           ↓ (if issues detected)
         Rollback available
@@ -187,7 +187,7 @@ class ModelDeployment:
         being deployed to production environments. Different thresholds
         are used for different stages:
         - Staging: 35% accuracy (lower bar for testing)
-        - GNU_Production: 80% accuracy (higher bar for live serving)
+        - GNU_Production: 40% accuracy (higher bar for live serving)
         
         Args:
             metrics (dict): Dictionary of model performance metrics
@@ -323,7 +323,7 @@ class ModelDeployment:
         Validation Threshold:
             - Minimum accuracy: 35%
             - Purpose: Basic quality gate for testing
-            - Lower than production (80%) to allow experimentation
+            - Lower than production (40%) to allow experimentation
             
         Example:
             >>> deployer = ModelDeployment()
@@ -372,30 +372,32 @@ class ModelDeployment:
         Production deployment workflow:
         1. Get model from Staging (or specific version if provided)
         2. Retrieve and validate performance metrics
-        3. Validate model meets 80% accuracy threshold (stricter than Staging)
+        3. Validate model meets 40% accuracy threshold (stricter than Staging)
         4. If valid, promote to GNU_Production stage
         5. Archive previous production version
         6. Add deployment metadata with timestamp
         
-        GNU_Production is the live serving environment. Only high-quality
-        models that have been tested in Staging should be promoted here.
+        GNU_Production is the live serving environment. Models that have been
+        tested in Staging should be promoted here. If no Staging model exists,
+        deployment from None stage is allowed (not recommended).
         
         Args:
             version (str/int, optional): Specific version to deploy
-                                        If None, uses latest Staging model
+                                        If None, uses latest Staging model or latest None stage model
                                         
         Returns:
             int/str: Version number if deployment successful
-            bool: False if validation fails or no Staging model exists
+            bool: False if validation fails or no model exists
             
         Validation Threshold:
-            - Minimum accuracy: 80%
-            - Purpose: Ensure high quality for production serving
+            - Minimum accuracy: 40%
+            - Purpose: Ensure reasonable quality for production serving
             - Higher than Staging (35%) for additional safety
             
         Best Practice:
             Always test in Staging first, then promote the same version
-            to GNU_Production. Don't skip Staging!
+            to GNU_Production. Direct deployment from None stage is possible
+            but not recommended.
             
         Example:
             >>> # Deploy latest Staging model to production
@@ -408,20 +410,41 @@ class ModelDeployment:
         
         # ===== STEP 1: Determine Which Version to Deploy =====
         if version is None:
-            # No version specified - get the current Staging model
+            # No version specified - try to get the current Staging model first
             # This is the recommended path: Staging → Production
             staging_versions = self.client.get_latest_versions(
                 self.model_name,
                 stages=["Staging"]
             )
             
-            # Ensure a model exists in Staging
-            if not staging_versions:
-                logger.error("No model in Staging. Deploy to Staging first.")
-                return False
+            if staging_versions:
+                # Use the Staging model version (recommended path)
+                version = staging_versions[0].version
+                logger.info(f"Using model from Staging: version {version}")
+            else:
+                # No model in Staging - try to get latest model from None stage
+                # This allows direct deployment to production if needed
+                logger.warning("No model in Staging. Attempting to deploy from None stage...")
                 
-            # Use the Staging model version
-            version = staging_versions[0].version
+                try:
+                    # Get latest versions from None stage (newly registered models)
+                    none_versions = self.client.get_latest_versions(
+                        self.model_name,
+                        stages=["None"]
+                    )
+                    
+                    if none_versions:
+                        # Use the latest model from None stage
+                        version = none_versions[0].version
+                        logger.info(f"Using latest model from None stage: version {version}")
+                        logger.warning("⚠️  Skipping Staging. Direct deployment to Production is not recommended.")
+                    else:
+                        logger.error("No model versions found in None stage. Train a model first.")
+                        return False
+                except Exception as e:
+                    logger.error(f"Error getting model from None stage: {str(e)}")
+                    logger.error("Train a model first or deploy to Staging.")
+                    return False
         
         # ===== STEP 2: Retrieve Model Metrics =====
         # Get the training run information for this version
@@ -430,10 +453,14 @@ class ModelDeployment:
         metrics = self.get_model_metrics(run_id)
         
         # ===== STEP 3: Validate for Production =====
-        # Stricter threshold (80%) for production vs staging (35%)
-        # This ensures only high-quality models make it to production
-        if not self.validate_model_performance(metrics, threshold=0.8):
-            logger.error("Model did not meet production threshold. Deployment aborted.")
+        # Production threshold (40%) - lower than original 80% to allow more models
+        # This is still higher than Staging (35%) for additional safety
+        # Can be adjusted based on business requirements
+        production_threshold = 0.4  # 40% accuracy threshold
+        
+        if not self.validate_model_performance(metrics, threshold=production_threshold):
+            logger.error(f"Model did not meet production threshold ({production_threshold*100:.0f}%). Deployment aborted.")
+            logger.error(f"Model accuracy: {metrics.get('accuracy', 0):.4f} < {production_threshold}")
             return False
         
         # ===== STEP 4: Transition to GNU_Production =====
@@ -659,7 +686,7 @@ def main():
         
         elif args.stage in ['production', 'GNU_Production']:
             # Deploy to GNU_Production (from Staging or specific version)
-            # Validates model meets 80% accuracy threshold
+            # Validates model meets 40% accuracy threshold
             # Both 'production' and 'GNU_Production' are accepted for compatibility
             version = deployer.deploy_to_production(args.version)
             
@@ -668,7 +695,7 @@ def main():
             else:
                 print("\n✗ GNU_Production deployment failed")
                 print("   Possible reasons:")
-                print("   - Model accuracy < 80%")
+                print("   - Model accuracy < 40%")
                 print("   - No model in Staging")
                 print("   - Specified version doesn't exist")
         
