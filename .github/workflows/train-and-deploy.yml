@@ -89,7 +89,23 @@ jobs:
     - name: Run tests
       run: |
         pytest tests/ || echo "No tests found, skipping..."
-    
+  
+    - name: Debug Databricks / MLflow connection
+      run: |
+        python - << 'EOF'
+        import mlflow
+        print("Tracking URI:", mlflow.get_tracking_uri())
+        try:
+            mlflow.set_tracking_uri("databricks")
+            print("Set tracking URI to Databricks OK")
+            mlflow.set_experiment("/Shared/tmp-connection-test")
+            print("Experiment set OK")
+        except Exception as e:
+            print("ERROR while connecting to Databricks/setting experiment:")
+            import traceback; traceback.print_exc()
+        EOF
+  
+
     - name: Train model
       env:
         # Explicitly set SQLite to prevent any Databricks attempts
