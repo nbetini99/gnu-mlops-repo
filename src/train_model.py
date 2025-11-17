@@ -24,6 +24,8 @@ from sklearn.preprocessing import StandardScaler
 import logging
 from pathlib import Path
 import sys
+import signal
+from contextlib import contextmanager
 
 # Setup logging with custom format
 logging.basicConfig(
@@ -53,14 +55,257 @@ def _validate_databricks_credentials():
     return True
 
 
+# ============================================================================
+# DATABRICKS CONNECTION TEST - COMMENTED OUT TO AVOID TIMEOUTS
+# ============================================================================
+# This function is commented out to prevent Databricks API calls that cause
+# 8+ minute timeouts in GitHub Actions. The code is preserved for future use
+# when Databricks connectivity is improved or when using Databricks Jobs API.
+#
+# To re-enable:
+# 1. Uncomment this function
+# 2. Uncomment the call to _test_databricks_connection() in _get_mlflow_tracking_uri()
+# 3. Ensure proper network connectivity to Databricks
+# ============================================================================
+def _test_databricks_connection(timeout_seconds=10):
+    """
+    Test Databricks connection with timeout
+    
+    Attempts a lightweight connection test to verify Databricks is reachable.
+    This prevents long timeouts during actual operations.
+    
+    NOTE: Currently commented out to avoid timeout issues in GitHub Actions.
+    Uncomment when Databricks connectivity is reliable.
+    
+    Args:
+        timeout_seconds: Maximum time to wait for connection test (default: 10 seconds)
+        
+    Returns:
+        bool: True if connection is successful, False if timeout or error
+    """
+    # COMMENTED OUT: Databricks connection test disabled to avoid timeouts
+    # if not _validate_databricks_credentials():
+    #     return False
+    # 
+    # try:
+    #     import mlflow
+    #     from mlflow.tracking import MlflowClient
+    #     
+    #     # Save current tracking URI
+    #     original_uri = mlflow.get_tracking_uri()
+    #     
+    #     # Try to connect to Databricks with timeout
+    #     if hasattr(signal, 'SIGALRM'):
+    #         # Unix/Linux/Mac - use signal-based timeout
+    #         def timeout_handler(signum, frame):
+    #             raise TimeoutError(f"Databricks connection test timed out after {timeout_seconds} seconds")
+    #         
+    #         old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    #         signal.alarm(timeout_seconds)
+    #         try:
+    #             mlflow.set_tracking_uri('databricks')
+    #             client = MlflowClient()
+    #             # Try a lightweight operation - list experiments (should be fast)
+    #             # This will fail fast if Databricks is unreachable
+    #             try:
+    #                 experiments = client.list_experiments(max_results=1)
+    #                 signal.alarm(0)
+    #                 signal.signal(signal.SIGALRM, old_handler)
+    #                 mlflow.set_tracking_uri(original_uri)
+    #                 return True
+    #             except Exception as e:
+    #                 # If we can't list experiments, Databricks is likely unreachable
+    #                 signal.alarm(0)
+    #                 signal.signal(signal.SIGALRM, old_handler)
+    #                 mlflow.set_tracking_uri(original_uri)
+    #                 logger.warning(f"Databricks connection test failed: {e}")
+    #                 return False
+    #         except TimeoutError:
+    #             signal.alarm(0)
+    #             signal.signal(signal.SIGALRM, old_handler)
+    #             mlflow.set_tracking_uri(original_uri)
+    #             logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
+    #             return False
+    #         except Exception as e:
+    #             signal.alarm(0)
+    #             signal.signal(signal.SIGALRM, old_handler)
+    #             mlflow.set_tracking_uri(original_uri)
+    #             logger.warning(f"Databricks connection test error: {e}")
+    #             return False
+    #     else:
+    #         # Windows - use threading timeout
+    #         import threading
+    #         result = {'success': False, 'error': None}
+    #         
+    #         def test_connection():
+    #             try:
+    #                 mlflow.set_tracking_uri('databricks')
+    #                 client = MlflowClient()
+    #                 experiments = client.list_experiments(max_results=1)
+    #                 result['success'] = True
+    #             except Exception as e:
+    #                 result['error'] = e
+    #         
+    #         thread = threading.Thread(target=test_connection)
+    #         thread.daemon = True
+    #         thread.start()
+    #         thread.join(timeout_seconds)
+    #         
+    #         mlflow.set_tracking_uri(original_uri)
+    #         
+    #         if thread.is_alive():
+    #             logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
+    #             return False
+    #         
+    #         if result['error']:
+    #             logger.warning(f"Databricks connection test failed: {result['error']}")
+    #             return False
+    #         
+    #         return result['success']
+    #         
+    # except Exception as e:
+    #     logger.warning(f"Error testing Databricks connection: {e}")
+    #     return False
+    
+    # Always return False when commented out (forces SQLite fallback)
+    return False
+
+
+@contextmanager
+def timeout_context(seconds):
+    """
+    Context manager for timeout operations
+    
+    Args:
+        seconds: Timeout in seconds
+        
+    Yields:
+        None
+        
+    Raises:
+        TimeoutError: If operation exceeds timeout
+    """
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Operation timed out after {seconds} seconds")
+    
+    # Set up signal handler for timeout (Unix only)
+    if hasattr(signal, 'SIGALRM'):
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+    else:
+        # Windows doesn't support SIGALRM, use threading timeout instead
+        import threading
+        result = [None]
+        exception = [None]
+        
+        def target():
+            try:
+                result[0] = True
+            except Exception as e:
+                exception[0] = e
+        
+        thread = threading.Thread(target=target)
+        thread.daemon = True
+        thread.start()
+        thread.join(seconds)
+        
+        if thread.is_alive():
+            raise TimeoutError(f"Operation timed out after {seconds} seconds")
+        if exception[0]:
+            raise exception[0]
+        yield
+
+
+def _set_experiment_with_timeout(experiment_name, tracking_uri, timeout_seconds=30):
+    """
+    Set MLflow experiment with timeout and automatic fallback
+    
+    Args:
+        experiment_name: Name of the experiment to set
+        tracking_uri: Current MLflow tracking URI
+        timeout_seconds: Maximum time to wait (default: 30 seconds)
+        
+    Returns:
+        tuple: (success: bool, fallback_uri: str or None)
+               success: True if experiment was set successfully
+               fallback_uri: SQLite URI if fallback needed, None otherwise
+    """
+    try:
+        # Try to set experiment with timeout
+        if hasattr(signal, 'SIGALRM'):
+            # Unix/Linux/Mac - use signal-based timeout
+            def timeout_handler(signum, frame):
+                raise TimeoutError(f"Setting experiment timed out after {timeout_seconds} seconds")
+            
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
+            try:
+                mlflow.set_experiment(experiment_name)
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+                return True, None
+            except (TimeoutError, Exception) as e:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+                raise
+        else:
+            # Windows - use threading timeout
+            import threading
+            result = {'success': False, 'error': None}
+            
+            def set_experiment():
+                try:
+                    mlflow.set_experiment(experiment_name)
+                    result['success'] = True
+                except Exception as e:
+                    result['error'] = e
+            
+            thread = threading.Thread(target=set_experiment)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout_seconds)
+            
+            if thread.is_alive():
+                raise TimeoutError(f"Setting experiment timed out after {timeout_seconds} seconds")
+            
+            if result['error']:
+                raise result['error']
+            
+            return True, None
+            
+    except TimeoutError as e:
+        logger.warning(f"Timeout setting experiment '{experiment_name}': {e}")
+        logger.info("Falling back to local SQLite tracking due to timeout")
+        return False, 'sqlite:///mlflow.db'
+    except Exception as e:
+        logger.warning(f"Error setting experiment '{experiment_name}': {e}")
+        # If it's a network/connection error, fall back to SQLite
+        if 'timeout' in str(e).lower() or 'timed out' in str(e).lower() or 'connection' in str(e).lower():
+            logger.info("Falling back to local SQLite tracking due to connection issue")
+            return False, 'sqlite:///mlflow.db'
+        # For other errors, try default experiment
+        try:
+            mlflow.set_experiment("gnu-mlops-experiments")
+            return True, None
+        except:
+            logger.warning("Could not set default experiment, will use current/default")
+            return False, None
+
+
 def _get_mlflow_tracking_uri(config_tracking_uri):
     """
     Determine the appropriate MLflow tracking URI with automatic fallback
     
     Priority:
     1. MLFLOW_TRACKING_URI environment variable (if set and valid)
-    2. Databricks (if credentials available and config says databricks)
-    3. SQLite fallback (local mode)
+    2. GitHub Actions detection (defaults to SQLite to avoid timeouts) - HIGHEST PRIORITY
+    3. Databricks (if credentials available and config says databricks)
+    4. SQLite fallback (local mode)
     
     Args:
         config_tracking_uri: Tracking URI from config file
@@ -68,7 +313,20 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
     Returns:
         str: MLflow tracking URI to use
     """
-    # Check environment variable first
+    # FIRST: Check if running in GitHub Actions (before any other checks)
+    # This prevents any Databricks API calls that could timeout
+    is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+    force_databricks = os.getenv('FORCE_DATABRICKS') == 'true'
+    
+    if is_github_actions and not force_databricks:
+        logger.info("=" * 60)
+        logger.info("GitHub Actions environment detected")
+        logger.info("Defaulting to SQLite to avoid Databricks timeout issues")
+        logger.info("To use Databricks, set FORCE_DATABRICKS=true environment variable")
+        logger.info("=" * 60)
+        return 'sqlite:///mlflow.db'
+    
+    # Check environment variable (but only if not in GitHub Actions or forced)
     env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
     
     # If explicitly set to SQLite or file path, use it
@@ -77,24 +335,58 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
         logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
         return env_tracking_uri
     
-    # If explicitly set to databricks, validate credentials
-    if env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks':
-        if _validate_databricks_credentials():
-            logger.info("Databricks credentials available, using Databricks MLflow tracking")
-            return 'databricks'
-        else:
-            logger.warning("Databricks tracking URI specified but credentials not available")
-            logger.info("Falling back to SQLite for local tracking")
-            return 'sqlite:///mlflow.db'
+    # ========================================================================
+    # DATABRICKS CONNECTION LOGIC - COMMENTED OUT TO AVOID TIMEOUTS
+    # ========================================================================
+    # This section is commented out to prevent Databricks API calls that cause
+    # 8+ minute timeouts in GitHub Actions. The code is preserved for future use.
+    #
+    # To re-enable:
+    # 1. Uncomment the _test_databricks_connection() function above
+    # 2. Uncomment this section
+    # 3. Ensure proper network connectivity to Databricks
+    # ========================================================================
+    # If explicitly set to databricks, validate credentials and test connection
+    # Only do this if NOT in GitHub Actions (unless forced)
+    # if (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
+    #     if _validate_databricks_credentials():
+    #         # Test connection with short timeout to avoid long waits
+    #         logger.info("Testing Databricks connection...")
+    #         if _test_databricks_connection(timeout_seconds=5):
+    #             logger.info("Databricks connection successful, using Databricks MLflow tracking")
+    #             return 'databricks'
+    #         else:
+    #             logger.warning("Databricks connection test failed or timed out")
+    #             logger.info("Falling back to SQLite for local tracking")
+    #             return 'sqlite:///mlflow.db'
+    #     else:
+    #         logger.warning("Databricks tracking URI specified but credentials not available")
+    #         logger.info("Falling back to SQLite for local tracking")
+    #         return 'sqlite:///mlflow.db'
     
-    # If environment variable is set, use it
+    # COMMENTED OUT: Skip Databricks connection attempts, use SQLite instead
+    if (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
+        logger.warning("Databricks connection logic is currently disabled to avoid timeout issues")
+        logger.info("Falling back to SQLite for local tracking")
+        logger.info("To enable Databricks, uncomment the connection test code in train_model.py")
+        return 'sqlite:///mlflow.db'
+    
+    # If environment variable is set, use it (but check GitHub Actions first)
     if env_tracking_uri:
+        if is_github_actions and env_tracking_uri == 'databricks' and not force_databricks:
+            logger.warning("MLFLOW_TRACKING_URI=databricks detected in GitHub Actions")
+            logger.info("Overriding to SQLite to avoid timeout issues")
+            logger.info("Set FORCE_DATABRICKS=true if you really need Databricks")
+            return 'sqlite:///mlflow.db'
         logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
         return env_tracking_uri
     
-    # Default to SQLite for local development
+    # Default to SQLite for local development or GitHub Actions
     if not config_tracking_uri or config_tracking_uri == 'databricks':
-        logger.info("Using SQLite for local MLflow tracking")
+        if is_github_actions:
+            logger.info("Using SQLite for GitHub Actions (avoids timeout issues)")
+        else:
+            logger.info("Using SQLite for local MLflow tracking")
         return 'sqlite:///mlflow.db'
     
     return config_tracking_uri
@@ -158,7 +450,7 @@ class MLModelTrainer:
         # Set tracking URI (fallback already handled in _get_mlflow_tracking_uri)
         mlflow.set_tracking_uri(tracking_uri)
         
-        # Set up experiment for organizing runs
+        # Set up experiment for organizing runs with timeout protection
         # Use a local-friendly experiment name if using SQLite
         gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
         
@@ -174,28 +466,56 @@ class MLModelTrainer:
                 experiment_name = 'gnu-mlops-experiments'
             
             logger.info(f"Using local experiment name: {experiment_name} (from {gnu_mlflow_config})")
-            try:
-                mlflow.set_experiment(experiment_name)
+            success, fallback_uri = _set_experiment_with_timeout(experiment_name, tracking_uri, timeout_seconds=10)
+            if success:
                 gnu_mlflow_config = experiment_name  # Update for logging
-            except Exception as e:
-                logger.warning(f"Could not set experiment {experiment_name}: {e}, using default")
-                mlflow.set_experiment("gnu-mlops-experiments")
-                gnu_mlflow_config = "gnu-mlops-experiments"
+            else:
+                if fallback_uri:
+                    logger.warning(f"Could not set experiment {experiment_name}, using default")
+                    try:
+                        mlflow.set_experiment("gnu-mlops-experiments")
+                        gnu_mlflow_config = "gnu-mlops-experiments"
+                    except:
+                        logger.warning("Using current/default experiment")
+                else:
+                    gnu_mlflow_config = experiment_name
         else:
-            try:
-                mlflow.set_experiment(gnu_mlflow_config)
-            except Exception as e:
-                logger.warning(f"Could not set experiment {gnu_mlflow_config}: {e}")
-                # Fallback to default experiment name
-                mlflow.set_experiment("gnu-mlops-experiments")
-                gnu_mlflow_config = "gnu-mlops-experiments"
+            # For Databricks or other remote tracking, use timeout protection
+            success, fallback_uri = _set_experiment_with_timeout(gnu_mlflow_config, tracking_uri, timeout_seconds=30)
+            if not success:
+                if fallback_uri:
+                    # Fallback to SQLite if Databricks times out
+                    logger.warning(f"Databricks experiment setup timed out, falling back to local SQLite")
+                    tracking_uri = fallback_uri
+                    mlflow.set_tracking_uri(tracking_uri)
+                    # Extract simpler experiment name for local use
+                    path_parts = [p for p in gnu_mlflow_config.strip('/').split('/') if p]
+                    if path_parts:
+                        experiment_name = path_parts[-1]
+                    else:
+                        experiment_name = 'gnu-mlops-experiments'
+                    try:
+                        mlflow.set_experiment(experiment_name)
+                        gnu_mlflow_config = experiment_name
+                        logger.info(f"Using local experiment: {experiment_name}")
+                    except:
+                        mlflow.set_experiment("gnu-mlops-experiments")
+                        gnu_mlflow_config = "gnu-mlops-experiments"
+                else:
+                    # Try default experiment
+                    try:
+                        mlflow.set_experiment("gnu-mlops-experiments")
+                        gnu_mlflow_config = "gnu-mlops-experiments"
+                    except:
+                        logger.warning("Could not set experiment, using current/default")
         
         logger.info(f"Training pipeline initialized")
         logger.info(f"→ Experiment: {gnu_mlflow_config}")
         logger.info(f"→ Tracking: {tracking_uri}")
         
-        # Store tracking URI for later use
+        # Store tracking URI for later use (may have changed during fallback)
         self.tracking_uri = tracking_uri
+        self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config  # Update config with final experiment name
     
     def load_data(self):
         """
