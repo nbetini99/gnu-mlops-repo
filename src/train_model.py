@@ -442,13 +442,34 @@ class MLModelTrainer:
                 self.config['mlflow'].get('gnu_mlflow_config', 'gnu-mlops-experiments')
             )
         
-        # Initialize MLflow connection with intelligent fallback
-        # This handles both local and Databricks scenarios gracefully
-        config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
-        tracking_uri = _get_mlflow_tracking_uri(config_tracking_uri)
+        # ========================================================================
+        # CRITICAL: Force SQLite in GitHub Actions to prevent Databricks timeouts
+        # ========================================================================
+        # This check happens FIRST, before any other logic, to ensure we NEVER
+        # try to use Databricks in GitHub Actions (which causes 8+ minute timeouts)
+        # ========================================================================
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+        env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
         
-        # Set tracking URI (fallback already handled in _get_mlflow_tracking_uri)
+        if is_github_actions:
+            # In GitHub Actions, ALWAYS use SQLite - no exceptions
+            tracking_uri = 'sqlite:///mlflow.db'
+            logger.info("=" * 70)
+            logger.info("CRITICAL: GitHub Actions detected - FORCING SQLite to prevent timeouts")
+            logger.info(f"Tracking URI: {tracking_uri}")
+            logger.info("=" * 70)
+        elif env_tracking_uri and env_tracking_uri.startswith('sqlite:///'):
+            # If explicitly set to SQLite, use it
+            tracking_uri = env_tracking_uri
+            logger.info(f"Using SQLite from environment: {tracking_uri}")
+        else:
+            # For local development, use intelligent fallback
+            config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
+            tracking_uri = _get_mlflow_tracking_uri(config_tracking_uri)
+        
+        # Set tracking URI (guaranteed to be SQLite in GitHub Actions)
         mlflow.set_tracking_uri(tracking_uri)
+        logger.info(f"Final MLflow tracking URI: {tracking_uri}")
         
         # Set up experiment for organizing runs with timeout protection
         # Use a local-friendly experiment name if using SQLite
