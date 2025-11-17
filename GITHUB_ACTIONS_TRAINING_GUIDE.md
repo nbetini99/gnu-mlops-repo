@@ -106,7 +106,9 @@ git push origin main
    - Go to: https://github.com/nbetini99/gnu-mlops-repo/actions
 
 2. **Select Workflow:**
-   - Click on **"Train and Deploy"** workflow (left sidebar)
+   - Look for **"MLOps Training and Deployment Pipeline"** in the left sidebar
+   - If you don't see it, use the direct link: https://github.com/nbetini99/gnu-mlops-repo/actions/workflows/train-and-deploy.yml
+   - **Note:** Workflows only appear after they've run at least once. If not visible, use Method 1 first.
 
 3. **Click "Run workflow":**
    - Click the **"Run workflow"** dropdown button (top right)
@@ -117,9 +119,14 @@ git push origin main
    - You'll see a new workflow run appear
    - Status will show "Queued" then "In progress"
 
+**If workflow not visible:**
+- **Option A:** Use direct link: https://github.com/nbetini99/gnu-mlops-repo/actions/workflows/train-and-deploy.yml
+- **Option B:** Trigger it first with Method 1 (automatic trigger)
+- **Option C:** See `FIND_WORKFLOW_GUIDE.md` for detailed troubleshooting
+
 **Visual Guide:**
 ```
-GitHub Repository → Actions Tab → Train and Deploy → Run workflow → main → Run workflow
+GitHub Repository → Actions Tab → MLOps Training and Deployment Pipeline → Run workflow → main → Run workflow
 ```
 
 ### Method 3: Using GitHub CLI (if installed)

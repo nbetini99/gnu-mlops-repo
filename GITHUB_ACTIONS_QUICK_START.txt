@@ -36,13 +36,23 @@ git push origin main
 
 METHOD 2: MANUAL (Recommended)
 ───────────────────────────────────────────────────────────────
-1. Go to: https://github.com/nbetini99/gnu-mlops-repo/actions
-2. Click "Train and Deploy" workflow
-3. Click "Run workflow" button
+NOTE: Workflow only appears after it runs at least once!
+
+If you don't see it, use Method 1 first, OR use direct link:
+
+Direct Link:
+  https://github.com/nbetini99/gnu-mlops-repo/actions/workflows/train-and-deploy.yml
+
+Steps:
+1. Go to the direct link above (or Actions tab)
+2. Look for "MLOps Training and Deployment Pipeline"
+3. Click "Run workflow" button (top right)
 4. Select branch: main
 5. Click "Run workflow"
 
 → Workflow starts immediately
+
+If workflow not visible, see: FIND_WORKFLOW_GUIDE.md
 
 ───────────────────────────────────────────────────────────────
 
