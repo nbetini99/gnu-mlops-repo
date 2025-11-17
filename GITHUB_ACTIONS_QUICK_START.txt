@@ -1,0 +1,163 @@
+╔══════════════════════════════════════════════════════════════╗
+║     GITHUB ACTIONS TRAINING - QUICK START                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: SET UP GITHUB SECRETS
+───────────────────────────────────────────────────────────────
+
+🔗 Go to: https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+
+Add these secrets (click "New repository secret" for each):
+
+1. DATABRICKS_HOST
+   Value: https://dbc-5e289a33-a706.cloud.databricks.com
+
+2. DATABRICKS_TOKEN
+   Value: dapicb7282387c50cc9aa3e8e3d18378b5fd
+
+3. DATABRICKS_WORKSPACE_PATH (optional)
+   Value: /Users/nbatink@gmail.com/gnu-mlops/liveprod
+
+4. DATABRICKS_EXPERIMENT_PATH (optional)
+   Value: /Users/nbatink@gmail.com/gnu-mlops/experiments
+
+───────────────────────────────────────────────────────────────
+
+🚀 STEP 2: TRIGGER WORKFLOW
+───────────────────────────────────────────────────────────────
+
+METHOD 1: AUTOMATIC (Push to Main)
+───────────────────────────────────────────────────────────────
+git add .
+git commit -m "Trigger training"
+git push origin main
+
+→ Workflow automatically starts
+
+METHOD 2: MANUAL (Recommended)
+───────────────────────────────────────────────────────────────
+1. Go to: https://github.com/nbetini99/gnu-mlops-repo/actions
+2. Click "Train and Deploy" workflow
+3. Click "Run workflow" button
+4. Select branch: main
+5. Click "Run workflow"
+
+→ Workflow starts immediately
+
+───────────────────────────────────────────────────────────────
+
+📊 STEP 3: MONITOR WORKFLOW
+───────────────────────────────────────────────────────────────
+
+🔗 View: https://github.com/nbetini99/gnu-mlops-repo/actions
+
+Click on running workflow to see:
+• Real-time logs
+• Step-by-step progress
+• Success/failure status
+
+Expected Steps:
+1. ✓ Checkout code
+2. ✓ Set up Python
+3. ✓ Install dependencies
+4. ✓ Check Databricks credentials
+5. ✓ Train model (5-10 minutes)
+6. ✓ Deploy to staging
+7. ✓ Deploy to production
+
+Total Time: ~15 minutes
+
+───────────────────────────────────────────────────────────────
+
+✅ STEP 4: VERIFY SUCCESS
+───────────────────────────────────────────────────────────────
+
+Look for these messages in logs:
+
+✓ Databricks credentials found in GitHub Secrets
+✓ Model training completed
+✓ Model registered in MLflow
+✓ Model deployed to staging
+✓ Model deployed to GNU_Production
+
+───────────────────────────────────────────────────────────────
+
+🔧 TROUBLESHOOTING
+───────────────────────────────────────────────────────────────
+
+❌ Workflow not triggering?
+   → Check workflow file exists: .github/workflows/train-and-deploy.yml
+   → Verify you're pushing to 'main' branch
+
+❌ Training fails?
+   → Check logs for error messages
+   → Verify secrets are configured
+   → Check requirements.txt has all dependencies
+
+❌ Deployment fails?
+   → Check model accuracy (needs >= 35% for staging, >= 40% for production)
+   → Verify model was registered in MLflow
+
+❌ Secrets not found?
+   → Go to: Settings → Secrets → Actions
+   → Verify secrets are added correctly
+   → Check secret names match exactly
+
+───────────────────────────────────────────────────────────────
+
+📋 QUICK COMMANDS
+───────────────────────────────────────────────────────────────
+
+# Trigger workflow (automatic)
+git add .
+git commit -m "Trigger training"
+git push origin main
+
+# View workflow runs
+# Go to: https://github.com/nbetini99/gnu-mlops-repo/actions
+
+# Re-run failed workflow
+# Actions → Failed run → Re-run all jobs
+
+───────────────────────────────────────────────────────────────
+
+🔗 USEFUL LINKS
+───────────────────────────────────────────────────────────────
+
+Workflow Runs:
+  https://github.com/nbetini99/gnu-mlops-repo/actions
+
+Secrets Page:
+  https://github.com/nbetini99/gnu-mlops-repo/settings/secrets/actions
+
+Repository:
+  https://github.com/nbetini99/gnu-mlops-repo
+
+───────────────────────────────────────────────────────────────
+
+✅ CHECKLIST
+───────────────────────────────────────────────────────────────
+
+Before Running:
+  [ ] GitHub Secrets configured
+  [ ] Code pushed to repository
+  [ ] Workflow file exists
+
+During Execution:
+  [ ] Workflow triggered
+  [ ] Monitor logs
+  [ ] Check for errors
+
+After Completion:
+  [ ] Training successful
+  [ ] Model deployed
+  [ ] Verify in MLflow
+
+───────────────────────────────────────────────────────────────
+
+📚 DETAILED GUIDE
+───────────────────────────────────────────────────────────────
+
+For complete step-by-step instructions, see:
+  GITHUB_ACTIONS_TRAINING_GUIDE.md
+
