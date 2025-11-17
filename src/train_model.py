@@ -35,24 +35,39 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# DATABRICKS CREDENTIAL VALIDATION - DISABLED
+# ============================================================================
+# This function is disabled to prevent any Databricks connectivity attempts.
+# All Databricks code is commented out to avoid timeout issues.
+# ============================================================================
 def _validate_databricks_credentials():
     """
     Check if Databricks credentials are available and valid
     
+    NOTE: This function is DISABLED - always returns False to prevent
+    any Databricks connectivity attempts. This prevents timeout issues
+    in GitHub Actions.
+    
     Returns:
-        bool: True if Databricks credentials are available, False otherwise
+        bool: Always returns False (Databricks is disabled)
     """
-    databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
-    databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
+    # DISABLED: Always return False to prevent Databricks connectivity
+    # Original code commented out below for reference:
+    # 
+    # databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
+    # databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
+    # 
+    # if not databricks_host or not databricks_token:
+    #     return False
+    # 
+    # # Check if credentials are not placeholders
+    # if databricks_token in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
+    #     return False
+    # 
+    # return True
     
-    if not databricks_host or not databricks_token:
-        return False
-    
-    # Check if credentials are not placeholders
-    if databricks_token in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
-        return False
-    
-    return True
+    return False  # Always return False - Databricks is disabled
 
 
 # ============================================================================
@@ -302,31 +317,30 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
     Determine the appropriate MLflow tracking URI with automatic fallback
     
     Priority:
-    1. MLFLOW_TRACKING_URI environment variable (if set and valid)
-    2. GitHub Actions detection (defaults to SQLite to avoid timeouts) - HIGHEST PRIORITY
-    3. Databricks (if credentials available and config says databricks)
-    4. SQLite fallback (local mode)
+    1. GitHub Actions detection (ALWAYS uses SQLite) - HIGHEST PRIORITY
+    2. MLFLOW_TRACKING_URI environment variable (if set and valid)
+    3. SQLite fallback (local mode)
+    
+    NOTE: All Databricks connectivity code is DISABLED to prevent timeouts.
     
     Args:
-        config_tracking_uri: Tracking URI from config file
+        config_tracking_uri: Tracking URI from config file (ignored if Databricks)
         
     Returns:
-        str: MLflow tracking URI to use
+        str: MLflow tracking URI to use (always SQLite in GitHub Actions)
     """
-    # FIRST: Check if running in GitHub Actions (before any other checks)
-    # This prevents any Databricks API calls that could timeout
+    # ========================================================================
+    # CRITICAL: GitHub Actions ALWAYS uses SQLite - no exceptions
+    # ========================================================================
     is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
-    force_databricks = os.getenv('FORCE_DATABRICKS') == 'true'
     
-    if is_github_actions and not force_databricks:
-        logger.info("=" * 60)
-        logger.info("GitHub Actions environment detected")
-        logger.info("Defaulting to SQLite to avoid Databricks timeout issues")
-        logger.info("To use Databricks, set FORCE_DATABRICKS=true environment variable")
-        logger.info("=" * 60)
+    if is_github_actions:
+        logger.info("=" * 70)
+        logger.info("GitHub Actions detected - FORCING SQLite (Databricks disabled)")
+        logger.info("=" * 70)
         return 'sqlite:///mlflow.db'
     
-    # Check environment variable (but only if not in GitHub Actions or forced)
+    # Check environment variable for local development
     env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
     
     # If explicitly set to SQLite or file path, use it
@@ -336,60 +350,31 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
         return env_tracking_uri
     
     # ========================================================================
-    # DATABRICKS CONNECTION LOGIC - COMMENTED OUT TO AVOID TIMEOUTS
+    # DATABRICKS CONNECTIVITY - COMPLETELY DISABLED
     # ========================================================================
-    # This section is commented out to prevent Databricks API calls that cause
-    # 8+ minute timeouts in GitHub Actions. The code is preserved for future use.
-    #
-    # To re-enable:
-    # 1. Uncomment the _test_databricks_connection() function above
-    # 2. Uncomment this section
-    # 3. Ensure proper network connectivity to Databricks
+    # All Databricks code is commented out to prevent timeout issues.
+    # If you need Databricks, use Databricks Jobs API instead.
     # ========================================================================
-    # If explicitly set to databricks, validate credentials and test connection
-    # Only do this if NOT in GitHub Actions (unless forced)
-    # if (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
-    #     if _validate_databricks_credentials():
-    #         # Test connection with short timeout to avoid long waits
-    #         logger.info("Testing Databricks connection...")
-    #         if _test_databricks_connection(timeout_seconds=5):
-    #             logger.info("Databricks connection successful, using Databricks MLflow tracking")
-    #             return 'databricks'
-    #         else:
-    #             logger.warning("Databricks connection test failed or timed out")
-    #             logger.info("Falling back to SQLite for local tracking")
-    #             return 'sqlite:///mlflow.db'
-    #     else:
-    #         logger.warning("Databricks tracking URI specified but credentials not available")
-    #         logger.info("Falling back to SQLite for local tracking")
-    #         return 'sqlite:///mlflow.db'
-    
-    # COMMENTED OUT: Skip Databricks connection attempts, use SQLite instead
-    if (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
-        logger.warning("Databricks connection logic is currently disabled to avoid timeout issues")
-        logger.info("Falling back to SQLite for local tracking")
-        logger.info("To enable Databricks, uncomment the connection test code in train_model.py")
+    # If environment variable is set to databricks, override to SQLite
+    if env_tracking_uri == 'databricks':
+        logger.warning("MLFLOW_TRACKING_URI=databricks detected but Databricks is disabled")
+        logger.info("Using SQLite instead to avoid timeout issues")
         return 'sqlite:///mlflow.db'
     
-    # If environment variable is set, use it (but check GitHub Actions first)
+    # If config says databricks, override to SQLite
+    if config_tracking_uri == 'databricks':
+        logger.warning("Config specifies Databricks but Databricks connectivity is disabled")
+        logger.info("Using SQLite instead to avoid timeout issues")
+        return 'sqlite:///mlflow.db'
+    
+    # If environment variable is set to something else, use it
     if env_tracking_uri:
-        if is_github_actions and env_tracking_uri == 'databricks' and not force_databricks:
-            logger.warning("MLFLOW_TRACKING_URI=databricks detected in GitHub Actions")
-            logger.info("Overriding to SQLite to avoid timeout issues")
-            logger.info("Set FORCE_DATABRICKS=true if you really need Databricks")
-            return 'sqlite:///mlflow.db'
         logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
         return env_tracking_uri
     
-    # Default to SQLite for local development or GitHub Actions
-    if not config_tracking_uri or config_tracking_uri == 'databricks':
-        if is_github_actions:
-            logger.info("Using SQLite for GitHub Actions (avoids timeout issues)")
-        else:
-            logger.info("Using SQLite for local MLflow tracking")
-        return 'sqlite:///mlflow.db'
-    
-    return config_tracking_uri
+    # Default to SQLite for local development
+    logger.info("Using SQLite for local MLflow tracking")
+    return 'sqlite:///mlflow.db'
 
 
 class MLModelTrainer:
@@ -443,19 +428,21 @@ class MLModelTrainer:
             )
         
         # ========================================================================
-        # CRITICAL: Force SQLite in GitHub Actions to prevent Databricks timeouts
+        # CRITICAL: Force SQLite in GitHub Actions - Databricks COMPLETELY DISABLED
         # ========================================================================
         # This check happens FIRST, before any other logic, to ensure we NEVER
-        # try to use Databricks in GitHub Actions (which causes 8+ minute timeouts)
+        # try to use Databricks in GitHub Actions (which causes 8+ minute timeouts).
+        # All Databricks connectivity code is disabled.
         # ========================================================================
         is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
         env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
         
         if is_github_actions:
-            # In GitHub Actions, ALWAYS use SQLite - no exceptions
+            # In GitHub Actions, ALWAYS use SQLite - Databricks is completely disabled
             tracking_uri = 'sqlite:///mlflow.db'
             logger.info("=" * 70)
-            logger.info("CRITICAL: GitHub Actions detected - FORCING SQLite to prevent timeouts")
+            logger.info("CRITICAL: GitHub Actions detected")
+            logger.info("Databricks connectivity is DISABLED - using SQLite only")
             logger.info(f"Tracking URI: {tracking_uri}")
             logger.info("=" * 70)
         elif env_tracking_uri and env_tracking_uri.startswith('sqlite:///'):
@@ -463,11 +450,11 @@ class MLModelTrainer:
             tracking_uri = env_tracking_uri
             logger.info(f"Using SQLite from environment: {tracking_uri}")
         else:
-            # For local development, use intelligent fallback
+            # For local development, use _get_mlflow_tracking_uri (which also disables Databricks)
             config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
             tracking_uri = _get_mlflow_tracking_uri(config_tracking_uri)
         
-        # Set tracking URI (guaranteed to be SQLite in GitHub Actions)
+        # Set tracking URI (guaranteed to be SQLite - Databricks is disabled)
         mlflow.set_tracking_uri(tracking_uri)
         logger.info(f"Final MLflow tracking URI: {tracking_uri}")
         
