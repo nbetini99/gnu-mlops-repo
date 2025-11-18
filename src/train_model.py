@@ -15,6 +15,8 @@ import os
 import yaml
 import mlflow
 import mlflow.sklearn
+from mlflow.tracking import MlflowClient
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score
@@ -35,53 +37,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# DATABRICKS CREDENTIAL VALIDATION - DISABLED
-# ============================================================================
-# This function is disabled to prevent any Databricks connectivity attempts.
-# All Databricks code is commented out to avoid timeout issues.
-# ============================================================================
 def _validate_databricks_credentials():
     """
     Check if Databricks credentials are available and valid
     
-    NOTE: This function is DISABLED - always returns False to prevent
-    any Databricks connectivity attempts. This prevents timeout issues
-    in GitHub Actions.
+    Validates that Databricks host and token are set and not placeholders.
+    This allows the system to determine if Databricks connectivity is possible.
     
     Returns:
-        bool: Always returns False (Databricks is disabled)
+        bool: True if Databricks credentials are available, False otherwise
     """
-    # DISABLED: Always return False to prevent Databricks connectivity
-    # Original code commented out below for reference:
-    # 
-    # databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
-    # databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
-    # 
-    # if not databricks_host or not databricks_token:
-    #     return False
-    # 
-    # # Check if credentials are not placeholders
-    # if databricks_token in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
-    #     return False
-    # 
-    # return True
+    databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
+    databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
     
-    return False  # Always return False - Databricks is disabled
+    if not databricks_host or not databricks_token:
+        return False
+    
+    # Check if credentials are not placeholders
+    if databricks_token in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
+        return False
+    
+    return True
 
 
-# ============================================================================
-# DATABRICKS CONNECTION TEST - COMMENTED OUT TO AVOID TIMEOUTS
-# ============================================================================
-# This function is commented out to prevent Databricks API calls that cause
-# 8+ minute timeouts in GitHub Actions. The code is preserved for future use
-# when Databricks connectivity is improved or when using Databricks Jobs API.
-#
-# To re-enable:
-# 1. Uncomment this function
-# 2. Uncomment the call to _test_databricks_connection() in _get_mlflow_tracking_uri()
-# 3. Ensure proper network connectivity to Databricks
-# ============================================================================
 def _test_databricks_connection(timeout_seconds=10):
     """
     Test Databricks connection with timeout
@@ -98,7 +76,6 @@ def _test_databricks_connection(timeout_seconds=10):
     Returns:
         bool: True if connection is successful, False if timeout or error
     """
-    # COMMENTED OUT: Databricks connection test disabled to avoid timeouts
     if not _validate_databricks_credentials():
         return False
     
@@ -319,12 +296,11 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
     Priority:
     1. GitHub Actions detection (ALWAYS uses SQLite) - HIGHEST PRIORITY
     2. MLFLOW_TRACKING_URI environment variable (if set and valid)
-    3. SQLite fallback (local mode)
-    
-    NOTE: All Databricks connectivity code is DISABLED to prevent timeouts.
+    3. Databricks (if credentials available and config says databricks)
+    4. SQLite fallback (local mode)
     
     Args:
-        config_tracking_uri: Tracking URI from config file (ignored if Databricks)
+        config_tracking_uri: Tracking URI from config file
         
     Returns:
         str: MLflow tracking URI to use (always SQLite in GitHub Actions)
@@ -333,14 +309,16 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
     # CRITICAL: GitHub Actions ALWAYS uses SQLite - no exceptions
     # ========================================================================
     is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+    force_databricks = os.getenv('FORCE_DATABRICKS') == 'true'
     
-    if is_github_actions:
+    if is_github_actions and not force_databricks:
         logger.info("=" * 70)
         logger.info("GitHub Actions detected - FORCING SQLite (Databricks disabled)")
+        logger.info("To use Databricks in GitHub Actions, set FORCE_DATABRICKS=true")
         logger.info("=" * 70)
         return 'sqlite:///mlflow.db'
     
-    # Check environment variable for local development
+    # Check environment variable
     env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
     
     # If explicitly set to SQLite or file path, use it
@@ -350,31 +328,45 @@ def _get_mlflow_tracking_uri(config_tracking_uri):
         return env_tracking_uri
     
     # ========================================================================
-    # DATABRICKS CONNECTIVITY - COMPLETELY DISABLED
+    # DATABRICKS CONNECTIVITY - ENABLED (when not in GitHub Actions)
     # ========================================================================
-    # All Databricks code is commented out to prevent timeout issues.
-    # If you need Databricks, use Databricks Jobs API instead.
-    # ========================================================================
-    # If environment variable is set to databricks, override to SQLite
-    if env_tracking_uri == 'databricks':
-        logger.warning("MLFLOW_TRACKING_URI=databricks detected but Databricks is disabled")
-        logger.info("Using SQLite instead to avoid timeout issues")
-        return 'sqlite:///mlflow.db'
+    # If explicitly set to databricks, validate credentials and test connection
+    # Only do this if NOT in GitHub Actions (unless forced)
+    if (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
+        if _validate_databricks_credentials():
+            # Test connection with short timeout to avoid long waits
+            logger.info("Testing Databricks connection...")
+            if _test_databricks_connection(timeout_seconds=5):
+                logger.info("Databricks connection successful, using Databricks MLflow tracking")
+                return 'databricks'
+            else:
+                logger.warning("Databricks connection test failed or timed out")
+                logger.info("Falling back to SQLite for local tracking")
+                return 'sqlite:///mlflow.db'
+        else:
+            logger.warning("Databricks tracking URI specified but credentials not available")
+            logger.info("Falling back to SQLite for local tracking")
+            return 'sqlite:///mlflow.db'
     
-    # If config says databricks, override to SQLite
-    if config_tracking_uri == 'databricks':
-        logger.warning("Config specifies Databricks but Databricks connectivity is disabled")
-        logger.info("Using SQLite instead to avoid timeout issues")
-        return 'sqlite:///mlflow.db'
-    
-    # If environment variable is set to something else, use it
+    # If environment variable is set, use it (but check GitHub Actions first)
     if env_tracking_uri:
+        if is_github_actions and env_tracking_uri == 'databricks' and not force_databricks:
+            logger.warning("MLFLOW_TRACKING_URI=databricks detected in GitHub Actions")
+            logger.info("Overriding to SQLite to avoid timeout issues")
+            logger.info("Set FORCE_DATABRICKS=true if you really need Databricks")
+            return 'sqlite:///mlflow.db'
         logger.info(f"Using MLflow tracking URI from environment: {env_tracking_uri}")
         return env_tracking_uri
     
-    # Default to SQLite for local development
-    logger.info("Using SQLite for local MLflow tracking")
-    return 'sqlite:///mlflow.db'
+    # Default to SQLite for local development or GitHub Actions
+    if not config_tracking_uri or config_tracking_uri == 'databricks':
+        if is_github_actions:
+            logger.info("Using SQLite for GitHub Actions (avoids timeout issues)")
+        else:
+            logger.info("Using SQLite for local MLflow tracking")
+        return 'sqlite:///mlflow.db'
+    
+    return config_tracking_uri
 
 
 class MLModelTrainer:
@@ -801,15 +793,47 @@ class MLModelTrainer:
             for metric_name, metric_value in metrics.items():
                 mlflow.log_metric(metric_name, metric_value)
             
-            # ===== STEP 5: Log Model to MLflow =====
+            # ===== STEP 5: Log Model to MLflow and Register =====
             # Save trained model in MLflow format
             # This automatically registers the model in Model Registry
             # The model can now be deployed to Staging or GNU_Production
-            mlflow.sklearn.log_model(
+            logger.info("Registering model in MLflow Model Registry...")
+            model_info = mlflow.sklearn.log_model(
                 model,
                 "model",
                 registered_model_name=self.config['mlflow']['model_name']
             )
+            
+            # Get model version information after registration
+            client = MlflowClient()
+            try:
+                # Get the latest version of the registered model
+                registered_model = client.get_registered_model(self.config['mlflow']['model_name'])
+                latest_version = registered_model.latest_versions[-1] if registered_model.latest_versions else None
+                
+                if latest_version:
+                    logger.info(f"✓ Model successfully registered!")
+                    logger.info(f"  Model Name: {self.config['mlflow']['model_name']}")
+                    logger.info(f"  Version: {latest_version.version}")
+                    logger.info(f"  Stage: {latest_version.current_stage}")
+                    logger.info(f"  Run ID: {run.info.run_id}")
+                    
+                    # Add model description with training metrics
+                    description = (
+                        f"Model trained on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"Accuracy: {metrics.get('accuracy', 0):.4f}\n"
+                        f"F1 Score: {metrics.get('f1_score', 0):.4f}\n"
+                        f"Run ID: {run.info.run_id}"
+                    )
+                    client.update_model_version(
+                        name=self.config['mlflow']['model_name'],
+                        version=latest_version.version,
+                        description=description
+                    )
+                    logger.info(f"  Description updated with training metrics")
+            except Exception as e:
+                logger.warning(f"Could not retrieve model version info: {e}")
+                logger.info("Model was logged but version info unavailable")
             
             # ===== STEP 6: Log Preprocessing Artifacts =====
             # Save the feature scaler so predictions use the same normalization

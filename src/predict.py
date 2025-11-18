@@ -85,18 +85,28 @@ class ModelPredictor:
         
         # Set up MLflow tracking connection with intelligent fallback
         # Check if Databricks credentials are available
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+        force_databricks = os.getenv('FORCE_DATABRICKS') == 'true'
         databricks_host = os.getenv('DATABRICKS_HOST') or os.getenv('DATABRICKS_SERVER_HOSTNAME')
         databricks_token = os.getenv('DATABRICKS_TOKEN') or os.getenv('DATABRICKS_ACCESS_TOKEN')
         
         config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
         env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
         
-        # Determine tracking URI with fallback
-        if env_tracking_uri and (env_tracking_uri.startswith('sqlite:///') or env_tracking_uri.startswith('file:///')):
+        # CRITICAL: Force SQLite in GitHub Actions (unless forced)
+        if is_github_actions and not force_databricks:
+            tracking_uri = 'sqlite:///mlflow.db'
+            logger.info("=" * 70)
+            logger.info("GitHub Actions detected - FORCING SQLite (Databricks disabled)")
+            logger.info("To use Databricks in GitHub Actions, set FORCE_DATABRICKS=true")
+            logger.info("=" * 70)
+        elif env_tracking_uri and (env_tracking_uri.startswith('sqlite:///') or env_tracking_uri.startswith('file:///')):
+            # If explicitly set to SQLite, use it
             tracking_uri = env_tracking_uri
-        elif (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks'):
+        elif (env_tracking_uri == 'databricks' or config_tracking_uri == 'databricks') and (not is_github_actions or force_databricks):
             if databricks_host and databricks_token and databricks_token not in ['YOUR_TOKEN', 'YOUR_DATABRICKS_ACCESS_TOKEN_HERE', '']:
                 tracking_uri = 'databricks'
+                logger.info("Databricks credentials available, using Databricks MLflow tracking")
             else:
                 logger.warning("Databricks tracking URI specified but credentials not available, using SQLite")
                 tracking_uri = 'sqlite:///mlflow.db'
