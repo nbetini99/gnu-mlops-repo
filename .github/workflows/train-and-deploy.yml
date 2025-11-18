@@ -105,8 +105,17 @@ jobs:
 
     - name: Train model
       env:
-        # Force Databricks if credentials are available
-        FORCE_DATABRICKS: ${{ steps.check_databricks.outputs.databricks_available == 'true' && 'true' || '' }}
+        # tell code we want Databricks in CI this time
+        FORCE_DATABRICKS: "true"
+        MLFLOW_TRACKING_URI: "databricks"
+
+        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+        DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+        # Unity Catalog config — same as deploy
+        DATABRICKS_USE_UNITY_CATALOG: "true"
+        DATABRICKS_CATALOG: "workspace"
+        DATABRICKS_SCHEMA: "default"
       run: |
         python src/train_model.py
     
