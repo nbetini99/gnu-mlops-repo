@@ -121,26 +121,41 @@ class ModelDeployment:
         # 1. Workspace Model Registry: uses simple name (e.g., "gnu-mlops-model")
         # 2. Unity Catalog Model Registry: uses three-part name (e.g., "catalog.schema.model_name")
         # SQLite uses simple name: model_name
-        base_model_name = self.config['mlflow']['model_name']
+                # Decide final model name for MLflow registry
+        # Priority:
+        # 1) Explicit model_name passed into the constructor (from CLI/env)
+        # 2) mlflow.model_name from config.yaml
+        base_model_name = self.model_name or self.config['mlflow']['model_name']
+
         if tracking_uri == 'databricks':
-            # Check if Unity Catalog is enabled
-            use_unity_catalog = self.config.get('databricks', {}).get('use_unity_catalog', False) or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+            # Determine if Unity Catalog should be used
+            uc_flag_config = self.config.get('databricks', {}).get('use_unity_catalog', False)
+            uc_flag_env = os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+            use_unity_catalog = uc_flag_config or uc_flag_env
+
             if use_unity_catalog:
-                # Construct Databricks Unity Catalog three-part model name
-                catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
-                schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
-                self.model_name = f"{catalog}.{schema}.{base_model_name}"
-                logger.info(f"Using Databricks Unity Catalog model name format: {self.model_name}")
+                # If caller already provided a fully-qualified UC name, keep it
+                if base_model_name.count(".") == 2:
+                    # e.g. "work.default.gnu-mlops-model"
+                    self.model_name = base_model_name
+                else:
+                    # Build UC name from catalog + schema + base model name
+                    catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'work'))
+                    schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
+                    self.model_name = f"{catalog}.{schema}.{base_model_name}"
+                logger.info("Using Databricks Unity Catalog model name: %s", self.model_name)
             else:
-                # Use Workspace Model Registry (simple name)
+                # Legacy Workspace Model Registry (simple name)
+                # For UC-only workspaces this should normally be disabled.
                 self.model_name = base_model_name
-                logger.info(f"Using Databricks Workspace Model Registry (simple name): {self.model_name}")
+                logger.info("Using Databricks Workspace Model Registry (simple name): %s", self.model_name)
         else:
-            # Use simple name for SQLite/local
+            # Non-Databricks backends (SQLite, file-based MLflow) use simple name
             self.model_name = base_model_name
-        
-        logger.info(f"Initialized deployment for model: {self.model_name}")
-        logger.info(f"MLflow tracking URI: {tracking_uri}")
+
+        logger.info("Initialized deployment for model: %s", self.model_name)
+        logger.info("MLflow tracking URI: %s", tracking_uri)
+
     
     def get_latest_model_version(self):
         """
@@ -731,35 +746,23 @@ def main():
     Raises:
         Exception: If deployment operation fails
     """
-    import argparse
-    
     # ===== Parse Command Line Arguments =====
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--stage",
+        type=str,
+        required=True,
+        choices=["staging", "production"],
+        help="Target stage to deploy the model to",
+    )
+    args = parser.parse_args()
+
     parser = argparse.ArgumentParser(
         description='Deploy ML Model to Databricks with stage management'
     )
     
-    # Required: deployment action/stage
-    parser.add_argument(
-        '--stage',
-        type=str,
-        choices=['staging', 'production', 'GNU_Production', 'info', 'rollback'],
-        required=True,
-        help='Deployment stage or action to perform (production and GNU_Production are equivalent)'
-    )
-
-    
-    # Optional: specific version number
-    parser.add_argument(
-        '--version',
-        type=str,
-        default=None,
-        help='Specific model version to deploy (optional, uses latest if not specified)'
-    )
-    
-    args = parser.parse_args()
-
-    model_name = os.getenv(ENV_MODEL_NAME_VAR, DEFAULT_MODEL_NAME)
-
+    # Use env or default UC name
+    model_name = os.getenv("MLFLOW_MODEL_NAME", "work.default.gnu-mlops-model")
     logger.info("Initialized deployment for model: %s", model_name)
     logger.info("Deploying to stage: %s", args.stage)
 
@@ -767,52 +770,27 @@ def main():
         # ===== Initialize Deployment System =====
         deployer = ModelDeployment(
             model_name=model_name,
-            target_stage=args.stage
+            target_stage=args.stage,
+            config_path="config.yaml",
         )
         
         # ===== Execute Requested Action =====
-        
-        if args.stage == 'staging':
-            # Deploy latest model to Staging environment
-            # Validates model meets 35% accuracy threshold
+
+
+        if args.stage == "staging":
             version = deployer.deploy_to_staging()
             print(f"\n✓ Model version {version} deployed to Staging")
             logger.info("Deployed version %s to Staging", version)
-        
-        elif args.stage in ['production', 'GNU_Production']:
-            # Deploy to GNU_Production (from Staging or specific version)
-            # Validates model meets 40% accuracy threshold
-            # Both 'production' and 'GNU_Production' are accepted for compatibility
-            version = deployer.deploy_to_production(args.version)
+
+        elif args.stage == "production":
             print(f"\n✓ Model version {version} deployed to Production")
+            version = deployer.deploy_to_production()
             logger.info("Deployed version %s to Production", version)
-            
-            if version:
-                print(f"\n✓ Model version {version} deployed to GNU_Production")
-            else:
-                print("\n✗ GNU_Production deployment failed")
-                print("   Possible reasons:")
-                print("   - Model not found (train a model first: python src/train_model.py)")
-                print("   - Model accuracy < 40%")
-                print("   - No model in Staging or None stage")
-                print("   - Specified version doesn't exist")
-                print("\n   💡 Tip: Train a model first with: python src/train_model.py")
         
         elif args.stage == 'info':
             # Display current production model information
             # Shows version, metrics, status, and metadata
             info = deployer.get_production_model_info()
-            
-            if info:
-                print("\n" + "="*50)
-                print("GNU_Production Model Information")
-                print("="*50)
-                for key, value in info.items():
-                    print(f"{key}: {value}")
-                print("="*50)
-            else:
-                print("\n⚠ No model currently in GNU_Production")
-                print("  Deploy a model first with: --stage production")
         
         elif args.stage == 'rollback':
             # Rollback production to previous version
