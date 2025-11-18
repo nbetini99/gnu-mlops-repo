@@ -474,106 +474,105 @@ class MLModelTrainer:
         
         # Set up experiment for organizing runs with timeout protection
         # Use a local-friendly experiment name if using SQLite
+                # Set up experiment for organizing runs
         gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
-        
-        # If using SQLite and experiment path looks like Databricks path, use simpler name
-        if tracking_uri.startswith('sqlite:///') and (gnu_mlflow_config.startswith('/Users/') or 
-                                                       gnu_mlflow_config.startswith('/')):
-            # Extract experiment name from path or use default
-            # Remove leading/trailing slashes and get last non-empty component
-            path_parts = [p for p in gnu_mlflow_config.strip('/').split('/') if p]
-            if path_parts:
-                experiment_name = path_parts[-1]
-            else:
-                experiment_name = 'gnu-mlops-experiments'
-            
-            logger.info(f"Using local experiment name: {experiment_name} (from {gnu_mlflow_config})")
-            success, fallback_uri = _set_experiment_with_timeout(experiment_name, tracking_uri, timeout_seconds=10)
-            if success:
-                gnu_mlflow_config = experiment_name  # Update for logging
-            else:
-                if fallback_uri:
-                    logger.warning(f"Could not set experiment {experiment_name}, using default")
-                    try:
-                        mlflow.set_experiment("gnu-mlops-experiments")
-                        gnu_mlflow_config = "gnu-mlops-experiments"
-                    except:
-                        logger.warning("Using current/default experiment")
-                else:
-                    gnu_mlflow_config = experiment_name
+
+        if tracking_uri == "databricks":
+            # --- Databricks: use a simple experiment name, ignore invalid workspace paths ---
+            # Prefer a clean name, not a full /Users/... path that may not exist
+            exp_name = os.getenv("MLFLOW_EXPERIMENT_NAME", gnu_mlflow_config)
+
+            # If the name looks like a path, strip it to last component
+            if "/" in exp_name:
+                parts = [p for p in exp_name.strip("/").split("/") if p]
+                if parts:
+                    clean_name = parts[-1]
+                    logger.warning(
+                        "Experiment name '%s' looks like a workspace path; using simple name '%s' instead",
+                        exp_name,
+                        clean_name,
+                    )
+                    exp_name = clean_name
+
+            try:
+                mlflow.set_experiment(exp_name)
+                gnu_mlflow_config = exp_name
+                logger.info(f"Using Databricks experiment: {exp_name}")
+            except Exception as e:
+                logger.error(f"Failed to set Databricks experiment '{exp_name}': {e}")
+                # Fail fast rather than running with experiment_id=None
+                raise
         else:
-            # For Databricks or other remote tracking, use timeout protection
-            success, fallback_uri = _set_experiment_with_timeout(gnu_mlflow_config, tracking_uri, timeout_seconds=30)
-            if not success:
-                if fallback_uri:
-                    # Fallback to SQLite if Databricks times out
-                    logger.warning(f"Databricks experiment setup timed out, falling back to local SQLite")
-                    tracking_uri = fallback_uri
-                    mlflow.set_tracking_uri(tracking_uri)
-                    # Extract simpler experiment name for local use
-                    path_parts = [p for p in gnu_mlflow_config.strip('/').split('/') if p]
-                    if path_parts:
-                        experiment_name = path_parts[-1]
-                    else:
-                        experiment_name = 'gnu-mlops-experiments'
-                    try:
-                        mlflow.set_experiment(experiment_name)
-                        gnu_mlflow_config = experiment_name
-                        logger.info(f"Using local experiment: {experiment_name}")
-                    except:
-                        mlflow.set_experiment("gnu-mlops-experiments")
-                        gnu_mlflow_config = "gnu-mlops-experiments"
+            # --- Local/SQLite behavior (keep your existing timeout + fallback logic) ---
+            # Use a local-friendly experiment name if using SQLite
+            if tracking_uri.startswith("sqlite:///") and (
+                gnu_mlflow_config.startswith("/Users/") or gnu_mlflow_config.startswith("/")
+            ):
+                # Extract experiment name from path or use default
+                path_parts = [p for p in gnu_mlflow_config.strip("/").split("/") if p]
+                if path_parts:
+                    experiment_name = path_parts[-1]
                 else:
-                    # Try default experiment
-                    try:
-                        mlflow.set_experiment("gnu-mlops-experiments")
-                        gnu_mlflow_config = "gnu-mlops-experiments"
-                    except:
-                        logger.warning("Could not set experiment, using current/default")
+                    experiment_name = "gnu-mlops-experiments"
+
+                logger.info(f"Using local experiment name: {experiment_name} (from {gnu_mlflow_config})")
+                success, fallback_uri = _set_experiment_with_timeout(
+                    experiment_name, tracking_uri, timeout_seconds=10
+                )
+                if success:
+                    gnu_mlflow_config = experiment_name  # Update for logging
+                else:
+                    if fallback_uri:
+                        logger.warning(f"Could not set experiment {experiment_name}, using default")
+                        try:
+                            mlflow.set_experiment("gnu-mlops-experiments")
+                            gnu_mlflow_config = "gnu-mlops-experiments"
+                        except Exception:
+                            logger.warning("Using current/default experiment")
+                    else:
+                        gnu_mlflow_config = experiment_name
+            else:
+                # For remote non-Databricks tracking (or simple SQLite), use timeout protection
+                success, fallback_uri = _set_experiment_with_timeout(
+                    gnu_mlflow_config, tracking_uri, timeout_seconds=30
+                )
+                if not success:
+                    if fallback_uri:
+                        # Fallback to SQLite if Databricks times out
+                        logger.warning(
+                            f"Remote experiment setup timed out, falling back to local SQLite"
+                        )
+                        tracking_uri = fallback_uri
+                        mlflow.set_tracking_uri(tracking_uri)
+                        path_parts = [p for p in gnu_mlflow_config.strip("/").split("/") if p]
+                        if path_parts:
+                            experiment_name = path_parts[-1]
+                        else:
+                            experiment_name = "gnu-mlops-experiments"
+                        try:
+                            mlflow.set_experiment(experiment_name)
+                            gnu_mlflow_config = experiment_name
+                            logger.info(f"Using local experiment: {experiment_name}")
+                        except Exception:
+                            mlflow.set_experiment("gnu-mlops-experiments")
+                            gnu_mlflow_config = "gnu-mlops-experiments"
+                    else:
+                        try:
+                            mlflow.set_experiment("gnu-mlops-experiments")
+                            gnu_mlflow_config = "gnu-mlops-experiments"
+                        except Exception:
+                            logger.warning("Could not set experiment, using current/default")
 
         logger.info(f"Training pipeline initialized")
         logger.info(f"→ Experiment: {gnu_mlflow_config}")
         logger.info(f"→ Tracking: {tracking_uri}")
-        
+
         # Store tracking URI for later use (may have changed during fallback)
         self.tracking_uri = tracking_uri
 
-        # --------------------------------------------------------------------
-        # Determine model registry name (used for both training & deployment)
-        # For Unity Catalog this becomes: workspace.default.gnu-mlops-model
-        # For local/SQLite this is just:  gnu-mlops-model
-        # --------------------------------------------------------------------
-        base_model_name = self.config.get('mlflow', {}).get('model_name', 'gnu-mlops-model')
-
-        # UC is enabled if:
-        #  - we're using Databricks tracking, AND
-        #  - config or env says to use Unity Catalog
-        use_unity_catalog = (
-            tracking_uri == 'databricks'
-            and (
-                self.config.get('databricks', {}).get('use_unity_catalog', False)
-                or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
-            )
-        )
-
-        if use_unity_catalog:
-            catalog = self.config.get('databricks', {}).get(
-                'catalog', os.getenv('DATABRICKS_CATALOG', 'workspace')
-            )
-            schema = self.config.get('databricks', {}).get(
-                'schema', os.getenv('DATABRICKS_SCHEMA', 'default')
-            )
-            self.model_name = f"{catalog}.{schema}.{base_model_name}"
-            logger.info(f"Using Databricks Unity Catalog model name: {self.model_name}")
-        else:
-            # Simple name (SQLite, local, or non-UC Databricks)
-            self.model_name = base_model_name
-            logger.info(f"Using simple model name: {self.model_name}")
-
-        # Update config with final experiment name
+        # (model name logic continues below – keep your existing self.model_name block)
         self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config
 
-        self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config  # Update config with final experiment name
     
     def load_data(self):
         """
