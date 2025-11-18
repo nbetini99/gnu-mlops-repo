@@ -450,24 +450,24 @@ class MLModelTrainer:
         # ========================================================================
         is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
         env_tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
-        
-        if is_github_actions:
-            # In GitHub Actions, ALWAYS use SQLite - Databricks is completely disabled
+        force_databricks = os.getenv('FORCE_DATABRICKS', '').lower() == 'true'
+
+        if is_github_actions and not force_databricks:
+            # Default in GitHub Actions: use SQLite (fast, no Databricks calls)
             tracking_uri = 'sqlite:///mlflow.db'
             logger.info("=" * 70)
-            logger.info("CRITICAL: GitHub Actions detected")
-            logger.info("Databricks connectivity is DISABLED - using SQLite only")
+            logger.info("GitHub Actions detected - using SQLite (Databricks disabled)")
             logger.info(f"Tracking URI: {tracking_uri}")
             logger.info("=" * 70)
-        elif env_tracking_uri and env_tracking_uri.startswith('sqlite:///'):
-            # If explicitly set to SQLite, use it
+        elif env_tracking_uri:
+            # If an explicit tracking URI is provided, use it (Databricks or SQLite)
             tracking_uri = env_tracking_uri
-            logger.info(f"Using SQLite from environment: {tracking_uri}")
+            logger.info(f"Using tracking URI from environment: {tracking_uri}")
         else:
-            # For local development, use _get_mlflow_tracking_uri (which also disables Databricks)
+            # Fallback for local dev: use value from config, possibly normalized
             config_tracking_uri = self.config.get('mlflow', {}).get('tracking_uri', 'sqlite:///mlflow.db')
             tracking_uri = _get_mlflow_tracking_uri(config_tracking_uri)
-        
+
         # Set tracking URI (guaranteed to be SQLite - Databricks is disabled)
         mlflow.set_tracking_uri(tracking_uri)
         logger.info(f"Final MLflow tracking URI: {tracking_uri}")
