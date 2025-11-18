@@ -377,7 +377,29 @@ class MLModelTrainer:
     through model evaluation and registration. It integrates with MLflow
     for experiment tracking and model versioning.
     """
-    
+    def __init__(self):
+        # Load config (you probably already have this)
+        self.config = load_config()
+
+        # === SET MODEL NAME HERE ===
+        base_name = self.config['mlflow']['model_name']  # typically "gnu-mlops-model"
+
+        use_uc = (
+            self.config.get('databricks', {}).get('use_unity_catalog', False)
+            or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+        )
+
+        if use_uc:
+            catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'workspace'))
+            schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
+            self.model_name = f"{catalog}.{schema}.{base_name}"
+        else:
+            self.model_name = base_name
+
+        logger.info(f"Trainer using model name: {self.model_name}")
+
+
+
     def __init__(self, config_path='config.yaml'):
         """
         Set up the training environment
@@ -508,38 +530,49 @@ class MLModelTrainer:
                         gnu_mlflow_config = "gnu-mlops-experiments"
                     except:
                         logger.warning("Could not set experiment, using current/default")
-        
+
         logger.info(f"Training pipeline initialized")
         logger.info(f"→ Experiment: {gnu_mlflow_config}")
         logger.info(f"→ Tracking: {tracking_uri}")
         
         # Store tracking URI for later use (may have changed during fallback)
         self.tracking_uri = tracking_uri
-        
-        # Determine model name based on tracking URI
-        # Databricks has two model registry types:
-        # 1. Workspace Model Registry: uses simple name (e.g., "gnu-mlops-model")
-        # 2. Unity Catalog Model Registry: uses three-part name (e.g., "catalog.schema.model_name")
-        # SQLite uses simple name: model_name
-        base_model_name = self.config['mlflow']['model_name']
-        if tracking_uri == 'databricks':
-            # Check if Unity Catalog is enabled
-            use_unity_catalog = self.config.get('databricks', {}).get('use_unity_catalog', False) or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
-            if use_unity_catalog:
-                # Construct Databricks Unity Catalog three-part model name
-                catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
-                schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
-                self.model_name = f"{catalog}.{schema}.{base_model_name}"
-                logger.info(f"Using Databricks Unity Catalog model name format: {self.model_name}")
-            else:
-                # Use Workspace Model Registry (simple name)
-                self.model_name = base_model_name
-                logger.info(f"Using Databricks Workspace Model Registry (simple name): {self.model_name}")
+
+        # --------------------------------------------------------------------
+        # Determine model registry name (used for both training & deployment)
+        # For Unity Catalog this becomes: workspace.default.gnu-mlops-model
+        # For local/SQLite this is just:  gnu-mlops-model
+        # --------------------------------------------------------------------
+        base_model_name = self.config.get('mlflow', {}).get('model_name', 'gnu-mlops-model')
+
+        # UC is enabled if:
+        #  - we're using Databricks tracking, AND
+        #  - config or env says to use Unity Catalog
+        use_unity_catalog = (
+            tracking_uri == 'databricks'
+            and (
+                self.config.get('databricks', {}).get('use_unity_catalog', False)
+                or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+            )
+        )
+
+        if use_unity_catalog:
+            catalog = self.config.get('databricks', {}).get(
+                'catalog', os.getenv('DATABRICKS_CATALOG', 'workspace')
+            )
+            schema = self.config.get('databricks', {}).get(
+                'schema', os.getenv('DATABRICKS_SCHEMA', 'default')
+            )
+            self.model_name = f"{catalog}.{schema}.{base_model_name}"
+            logger.info(f"Using Databricks Unity Catalog model name: {self.model_name}")
         else:
-            # Use simple name for SQLite/local
+            # Simple name (SQLite, local, or non-UC Databricks)
             self.model_name = base_model_name
-            logger.info(f"Using local model name: {self.model_name}")
-        
+            logger.info(f"Using simple model name: {self.model_name}")
+
+        # Update config with final experiment name
+        self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config
+
         self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config  # Update config with final experiment name
     
     def load_data(self):
@@ -823,24 +856,17 @@ class MLModelTrainer:
             # This automatically registers the model in Model Registry
             # The model can now be deployed to Staging or GNU_Production
             logger.info("Registering model in MLflow Model Registry...")
-            # Use the model_name determined in __init__ (handles Databricks vs SQLite format)
 
-            base_name = "gnu-mlops-model"   # or from config['mlflow']['model_name']
-            use_uc = True  # or from config/env like in deploy_model.py
-
-            if use_uc:
-                catalog = "workspace"
-                schema = "default"
-                registered_name = f"{catalog}.{schema}.{base_name}"
-            else:
-                registered_name = base_name
+            # self.model_name should already be set in __init__ with the correct format.
+            # For UC this should be: "workspace.default.gnu-mlops-model"
+            registered_name = self.model_name
 
             model_info = mlflow.sklearn.log_model(
                 sk_model=model,
                 artifact_path="model",
                 registered_model_name=registered_name
             )
-            
+
             # Get model version information after registration
             client = MlflowClient()
             try:
