@@ -111,16 +111,16 @@ jobs:
         python src/train_model.py
     
     - name: Deploy to Staging
-    env:
-      MLFLOW_TRACKING_URI: databricks
-      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-      DATABRICKS_USE_UNITY_CATALOG: "true"
-      DATABRICKS_CATALOG: "work"
-      DATABRICKS_SCHEMA: "default"
-      MLFLOW_MODEL_NAME: "work.default.gnu-mlops-model"
-    run: |
-      python src/deploy_model.py --stage staging
+      env:
+        MLFLOW_TRACKING_URI: databricks
+        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+        DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        DATABRICKS_USE_UNITY_CATALOG: "true"
+        DATABRICKS_CATALOG: "work"
+        DATABRICKS_SCHEMA: "default"
+        MLFLOW_MODEL_NAME: "work.default.gnu-mlops-model"
+      run: |
+        python src/deploy_model.py --stage staging
   
   deploy-production:
     needs: train
