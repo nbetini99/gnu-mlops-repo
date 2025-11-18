@@ -116,6 +116,10 @@ jobs:
         DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
         DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         MLFLOW_MODEL_NAME: "gnu-mlops-model"
+        DATABRICKS_USE_UNITY_CATALOG: "true"
+        DATABRICKS_CATALOG: "workspace"
+        DATABRICKS_SCHEMA: "default"
+        MLFLOW_MODEL_NAME: "workspace.default.gnu-mlops-model" 
       run: |
         python src/deploy_model.py --stage staging
   
