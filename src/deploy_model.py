@@ -28,6 +28,7 @@ from datetime import datetime
 DEFAULT_MODEL_NAME = "work.default.gnu-mlops-model"
 ENV_MODEL_NAME_VAR = "MLFLOW_MODEL_NAME"
 
+
 # Configure logging with consistent format
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,8 +58,9 @@ class ModelDeployment:
           ↓ (if issues detected)
         Rollback available
     """
-    
-    def __init__(self, config_path='config.yaml'):
+    def __init__(self, model_name: str, target_stage: str, config_path='config.yaml'):
+        self.model_name = model_name
+        self.target_stage = target_stage
         """
         Initialize deployment system with configuration
         
@@ -370,6 +372,7 @@ class ModelDeployment:
             >>> print(f"Deployed version {version} to Staging")
         """
         logger.info("Deploying model to Staging...")
+        self.client.get_registered_model(self.model_name)
         
         # ===== STEP 0: Check if Model Exists =====
         # First, verify the model is registered in MLflow
@@ -743,6 +746,7 @@ def main():
         required=True,
         help='Deployment stage or action to perform (production and GNU_Production are equivalent)'
     )
+
     
     # Optional: specific version number
     parser.add_argument(
@@ -754,12 +758,8 @@ def main():
     
     args = parser.parse_args()
 
-    model_name = (
-        args.model_name
-        or os.getenv(ENV_MODEL_NAME_VAR)
-        or DEFAULT_MODEL_NAME
-    )
-    
+    model_name = os.getenv(ENV_MODEL_NAME_VAR, DEFAULT_MODEL_NAME)
+
     logger.info("Initialized deployment for model: %s", model_name)
     logger.info("Deploying to stage: %s", args.stage)
 
