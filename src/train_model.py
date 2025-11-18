@@ -478,30 +478,37 @@ class MLModelTrainer:
         gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
 
         if tracking_uri == "databricks":
-            # --- Databricks: use a simple experiment name, ignore invalid workspace paths ---
-            # Prefer a clean name, not a full /Users/... path that may not exist
-            exp_name = os.getenv("MLFLOW_EXPERIMENT_NAME", gnu_mlflow_config)
+            # --- Databricks: experiment names MUST be absolute workspace paths ---
+            # Priority:
+            #   1) DATABRICKS_EXPERIMENT_PATH env var (if set)
+            #   2) config['mlflow']['gnu_mlflow_config']
+            #   3) default: /Shared/gnu-mlops-experiments
+            exp_path = os.getenv("DATABRICKS_EXPERIMENT_PATH") or gnu_mlflow_config
 
-            # If the name looks like a path, strip it to last component
-            if "/" in exp_name:
-                parts = [p for p in exp_name.strip("/").split("/") if p]
-                if parts:
-                    clean_name = parts[-1]
-                    logger.warning(
-                        "Experiment name '%s' looks like a workspace path; using simple name '%s' instead",
-                        exp_name,
-                        clean_name,
-                    )
-                    exp_name = clean_name
+            # If the value is redacted ('***') or empty, fall back to a safe default
+            if not exp_path or exp_path == "***":
+                exp_path = "/Shared/gnu-mlops-experiments"
+
+            # Ensure it is an absolute path
+            if not exp_path.startswith("/"):
+                # Put it under /Shared if a bare name was given
+                logger.warning(
+                    "Databricks experiment name '%s' is not an absolute path; "
+                    "using '/Shared/%s' instead",
+                    exp_path,
+                    exp_path,
+                )
+                exp_path = f"/Shared/{exp_path}"
 
             try:
-                mlflow.set_experiment(exp_name)
-                gnu_mlflow_config = exp_name
-                logger.info(f"Using Databricks experiment: {exp_name}")
+                mlflow.set_experiment(exp_path)
+                gnu_mlflow_config = exp_path
+                logger.info(f"Using Databricks experiment path: {exp_path}")
             except Exception as e:
-                logger.error(f"Failed to set Databricks experiment '{exp_name}': {e}")
+                logger.error(f"Failed to set Databricks experiment '{exp_path}': {e}")
                 # Fail fast rather than running with experiment_id=None
                 raise
+
         else:
             # --- Local/SQLite behavior (keep your existing timeout + fallback logic) ---
             # Use a local-friendly experiment name if using SQLite
