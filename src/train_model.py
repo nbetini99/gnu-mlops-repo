@@ -182,8 +182,8 @@ def _test_databricks_connection(timeout_seconds=10):
         logger.warning(f"Error testing Databricks connetion")
         return False
     
-    Always return False when commented out (forces SQLite fallback)
-    return False
+    #Always return False when commented out (forces SQLite fallback)
+    #return False
 
 
 @contextmanager
