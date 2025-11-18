@@ -141,9 +141,15 @@ class ModelPredictor:
             that were logged during training.
         """
         try:
+            # Map "GNU_Production" to "Production" for MLflow API
+            # MLflow only accepts "Production" as a valid stage name, not "GNU_Production"
+            mlflow_stage = "Production" if self.stage == "GNU_Production" else self.stage
+            
             # Construct MLflow model URI
             # Format: models:/model_name/stage
-            model_uri = f"models:/{self.model_name}/{self.stage}"
+            model_uri = f"models:/{self.model_name}/{mlflow_stage}"
+            
+            logger.info(f"Loading model from stage: {self.stage} (MLflow stage: {mlflow_stage})")
             
             # Load model from MLflow in generic python_function format
             # This format works with any sklearn-compatible model
