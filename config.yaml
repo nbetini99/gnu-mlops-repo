@@ -16,7 +16,7 @@ databricks:
 # MLflow Configuration
 mlflow:
   gnu_mlflow_config: "/Users/nbatink@gmail.com/gnu-mlops/experiments"  # Default - overridden by DATABRICKS_EXPERIMENT_PATH env var
-  model_name: "gnu-mlops-model"
+  model_name: "workspace.default.gnu-mlops-model"
   tracking_uri: "databricks"  # Can be overridden via MLFLOW_TRACKING_URI env var
 
 # Model Configuration
