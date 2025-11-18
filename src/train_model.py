@@ -824,10 +824,21 @@ class MLModelTrainer:
             # The model can now be deployed to Staging or GNU_Production
             logger.info("Registering model in MLflow Model Registry...")
             # Use the model_name determined in __init__ (handles Databricks vs SQLite format)
+
+            base_name = "gnu-mlops-model"   # or from config['mlflow']['model_name']
+            use_uc = True  # or from config/env like in deploy_model.py
+
+            if use_uc:
+                catalog = "workspace"
+                schema = "default"
+                registered_name = f"{catalog}.{schema}.{base_name}"
+            else:
+                registered_name = base_name
+
             model_info = mlflow.sklearn.log_model(
-                model,
-                "model",
-                registered_model_name="work.default.gnu-mlops-model"
+                sk_model=model,
+                artifact_path="model",
+                registered_model_name=registered_name
             )
             
             # Get model version information after registration

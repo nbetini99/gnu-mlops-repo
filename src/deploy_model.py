@@ -25,7 +25,7 @@ import logging
 from datetime import datetime
 
 
-DEFAULT_MODEL_NAME = "work.default.gnu-mlops-model"
+DEFAULT_MODEL_NAME = "gnu-mlops-model"
 ENV_MODEL_NAME_VAR = "MLFLOW_MODEL_NAME"
 
 
@@ -762,7 +762,7 @@ def main():
     )
     
     # Use env or default UC name
-    model_name = os.getenv("MLFLOW_MODEL_NAME", "work.default.gnu-mlops-model")
+    model_name = os.getenv("MLFLOW_MODEL_NAME", "gnu-mlops-model")
     logger.info("Initialized deployment for model: %s", model_name)
     logger.info("Deploying to stage: %s", args.stage)
 
@@ -775,8 +775,6 @@ def main():
         )
         
         # ===== Execute Requested Action =====
-
-
         if args.stage == "staging":
             version = deployer.deploy_to_staging()
             print(f"\n✓ Model version {version} deployed to Staging")
