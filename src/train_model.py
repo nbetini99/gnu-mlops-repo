@@ -99,90 +99,90 @@ def _test_databricks_connection(timeout_seconds=10):
         bool: True if connection is successful, False if timeout or error
     """
     # COMMENTED OUT: Databricks connection test disabled to avoid timeouts
-    # if not _validate_databricks_credentials():
-    #     return False
-    # 
-    # try:
-    #     import mlflow
-    #     from mlflow.tracking import MlflowClient
-    #     
-    #     # Save current tracking URI
-    #     original_uri = mlflow.get_tracking_uri()
-    #     
-    #     # Try to connect to Databricks with timeout
-    #     if hasattr(signal, 'SIGALRM'):
-    #         # Unix/Linux/Mac - use signal-based timeout
-    #         def timeout_handler(signum, frame):
-    #             raise TimeoutError(f"Databricks connection test timed out after {timeout_seconds} seconds")
-    #         
-    #         old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    #         signal.alarm(timeout_seconds)
-    #         try:
-    #             mlflow.set_tracking_uri('databricks')
-    #             client = MlflowClient()
-    #             # Try a lightweight operation - list experiments (should be fast)
-    #             # This will fail fast if Databricks is unreachable
-    #             try:
-    #                 experiments = client.list_experiments(max_results=1)
-    #                 signal.alarm(0)
-    #                 signal.signal(signal.SIGALRM, old_handler)
-    #                 mlflow.set_tracking_uri(original_uri)
-    #                 return True
-    #             except Exception as e:
-    #                 # If we can't list experiments, Databricks is likely unreachable
-    #                 signal.alarm(0)
-    #                 signal.signal(signal.SIGALRM, old_handler)
-    #                 mlflow.set_tracking_uri(original_uri)
-    #                 logger.warning(f"Databricks connection test failed: {e}")
-    #                 return False
-    #         except TimeoutError:
-    #             signal.alarm(0)
-    #             signal.signal(signal.SIGALRM, old_handler)
-    #             mlflow.set_tracking_uri(original_uri)
-    #             logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
-    #             return False
-    #         except Exception as e:
-    #             signal.alarm(0)
-    #             signal.signal(signal.SIGALRM, old_handler)
-    #             mlflow.set_tracking_uri(original_uri)
-    #             logger.warning(f"Databricks connection test error: {e}")
-    #             return False
-    #     else:
-    #         # Windows - use threading timeout
-    #         import threading
-    #         result = {'success': False, 'error': None}
-    #         
-    #         def test_connection():
-    #             try:
-    #                 mlflow.set_tracking_uri('databricks')
-    #                 client = MlflowClient()
-    #                 experiments = client.list_experiments(max_results=1)
-    #                 result['success'] = True
-    #             except Exception as e:
-    #                 result['error'] = e
-    #         
-    #         thread = threading.Thread(target=test_connection)
-    #         thread.daemon = True
-    #         thread.start()
-    #         thread.join(timeout_seconds)
-    #         
-    #         mlflow.set_tracking_uri(original_uri)
-    #         
-    #         if thread.is_alive():
-    #             logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
-    #             return False
-    #         
-    #         if result['error']:
-    #             logger.warning(f"Databricks connection test failed: {result['error']}")
-    #             return False
-    #         
-    #         return result['success']
-    #         
-    # except Exception as e:
-    #     logger.warning(f"Error testing Databricks connection: {e}")
-    #     return False
+    if not _validate_databricks_credentials():
+        return False
     
-    # Always return False when commented out (forces SQLite fallback)
+    try:
+        import mlflow
+        from mlflow.tracking import MlflowClient
+        
+        # Save current tracking URI
+        original_uri = mlflow.get_tracking_uri()
+        
+        # Try to connect to Databricks with timeout
+        if hasattr(signal, 'SIGALRM'):
+            # Unix/Linux/Mac - use signal-based timeout
+            def timeout_handler(signum, frame):
+                raise TimeoutError(f"Databricks connection test timed out after {timeout_seconds} seconds")
+            
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
+            try:
+                mlflow.set_tracking_uri('databricks')
+                client = MlflowClient()
+                # Try a lightweight operation - list experiments (should be fast)
+                # This will fail fast if Databricks is unreachable
+                try:
+                    experiments = client.list_experiments(max_results=1)
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                    mlflow.set_tracking_uri(original_uri)
+                    return True
+                except Exception as e:
+                    # If we can't list experiments, Databricks is likely unreachable
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                    mlflow.set_tracking_uri(original_uri)
+                    logger.warning(f"Databricks connection test failed: {e}")
+                    return False
+            except TimeoutError:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+                mlflow.set_tracking_uri(original_uri)
+                logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
+                return False
+            except Exception as e:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+                mlflow.set_tracking_uri(original_uri)
+                logger.warning(f"Databricks connection test error: {e}")
+                return False
+        else:
+            # Windows - use threading timeout
+            import threading
+            result = {'success': False, 'error': None}
+            
+            def test_connection():
+                try:
+                    mlflow.set_tracking_uri('databricks')
+                    client = MlflowClient()
+                    experiments = client.list_experiments(max_results=1)
+                    result['success'] = True
+                except Exception as e:
+                    result['error'] = e
+            
+            thread = threading.Thread(target=test_connection)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout_seconds)
+            
+            mlflow.set_tracking_uri(original_uri)
+            
+            if thread.is_alive():
+                logger.warning(f"Databricks connection test timed out after {timeout_seconds} seconds")
+                return False
+            
+            if result['error']:
+                logger.warning(f"Databricks connection test failed: {result['error']}")
+                return False
+            
+            return result['success']
+            
+    except Exception as e:
+        logger.warning(f"Error testing Databricks conneS
+        return False
+    
+    Always return False when commented out (forces SQLite fallback)
     return False
 
 
@@ -854,6 +854,8 @@ def main():
     Raises:
         Exception: Propagates any errors from training pipeline
     """
+    print("Hello TEST")
+    logger.info(f"Logging HELLO TEST")
     try:
         # Initialize trainer with default config
         # Will use config.local.yaml if it exists, otherwise config.yaml
