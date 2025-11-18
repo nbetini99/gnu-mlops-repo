@@ -179,7 +179,7 @@ def _test_databricks_connection(timeout_seconds=10):
             return result['success']
             
     except Exception as e:
-        logger.warning(f"Error testing Databricks conneS
+        logger.warning(f"Error testing Databricks connetion")
         return False
     
     Always return False when commented out (forces SQLite fallback)
