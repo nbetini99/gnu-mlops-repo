@@ -515,6 +515,23 @@ class MLModelTrainer:
         
         # Store tracking URI for later use (may have changed during fallback)
         self.tracking_uri = tracking_uri
+        
+        # Determine model name based on tracking URI
+        # Databricks requires three-part name: catalog.schema.model_name
+        # SQLite uses simple name: model_name
+        base_model_name = self.config['mlflow']['model_name']
+        if tracking_uri == 'databricks':
+            # Construct Databricks three-part model name
+            # Try to get catalog and schema from config or environment, default to main.default
+            catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
+            schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
+            self.model_name = f"{catalog}.{schema}.{base_model_name}"
+            logger.info(f"Using Databricks model name format: {self.model_name}")
+        else:
+            # Use simple name for SQLite/local
+            self.model_name = base_model_name
+            logger.info(f"Using local model name: {self.model_name}")
+        
         self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config  # Update config with final experiment name
     
     def load_data(self):
@@ -798,22 +815,23 @@ class MLModelTrainer:
             # This automatically registers the model in Model Registry
             # The model can now be deployed to Staging or GNU_Production
             logger.info("Registering model in MLflow Model Registry...")
+            # Use the model_name determined in __init__ (handles Databricks vs SQLite format)
             model_info = mlflow.sklearn.log_model(
                 model,
                 "model",
-                registered_model_name=self.config['mlflow']['model_name']
+                registered_model_name=self.model_name
             )
             
             # Get model version information after registration
             client = MlflowClient()
             try:
                 # Get the latest version of the registered model
-                registered_model = client.get_registered_model(self.config['mlflow']['model_name'])
+                registered_model = client.get_registered_model(self.model_name)
                 latest_version = registered_model.latest_versions[-1] if registered_model.latest_versions else None
                 
                 if latest_version:
                     logger.info(f"✓ Model successfully registered!")
-                    logger.info(f"  Model Name: {self.config['mlflow']['model_name']}")
+                    logger.info(f"  Model Name: {self.model_name}")
                     logger.info(f"  Version: {latest_version.version}")
                     logger.info(f"  Stage: {latest_version.current_stage}")
                     logger.info(f"  Run ID: {run.info.run_id}")
@@ -826,7 +844,7 @@ class MLModelTrainer:
                         f"Run ID: {run.info.run_id}"
                     )
                     client.update_model_version(
-                        name=self.config['mlflow']['model_name'],
+                        name=self.model_name,
                         version=latest_version.version,
                         description=description
                     )
@@ -856,7 +874,7 @@ class MLModelTrainer:
             
             # ===== STEP 8: Complete and Return Results =====
             logger.info(f"Model training completed. Run ID: {run.info.run_id}")
-            logger.info(f"Model registered as: {self.config['mlflow']['model_name']}")
+            logger.info(f"Model registered as: {self.model_name}")
             
             # Return run ID for tracking and metrics for evaluation
             return run.info.run_id, metrics

@@ -118,7 +118,20 @@ class ModelPredictor:
         mlflow.set_tracking_uri(tracking_uri)
         
         # Store model information
-        self.model_name = self.config['mlflow']['model_name']
+        # Databricks requires three-part name: catalog.schema.model_name
+        # SQLite uses simple name: model_name
+        base_model_name = self.config['mlflow']['model_name']
+        if tracking_uri == 'databricks':
+            # Construct Databricks three-part model name
+            # Try to get catalog and schema from config or environment, default to main.default
+            catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
+            schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
+            self.model_name = f"{catalog}.{schema}.{base_model_name}"
+            logger.info(f"Using Databricks model name format: {self.model_name}")
+        else:
+            # Use simple name for SQLite/local
+            self.model_name = base_model_name
+        
         self.stage = stage
         
         # Load the model from MLflow Model Registry
