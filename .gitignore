@@ -108,3 +108,6 @@ LOCAL_PRODUCTION_DEPLOYMENT.md
 AUTOMATIC_RETRAINING_GUIDE.md
 BATCH_INFERENCE_GUIDE.md
 *.zip
+.venv/
+.venv311/
+venv/ # if not already there

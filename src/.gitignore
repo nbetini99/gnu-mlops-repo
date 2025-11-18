@@ -1,3 +1,6 @@
 .venv/
 .venv311/
 venv/ # if not already there
+.venv/
+.venv311/
+venv/ # if not already there
