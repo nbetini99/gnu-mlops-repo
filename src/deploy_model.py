@@ -17,11 +17,16 @@ The deployment follows a gated approach:
 """
 
 import os
+import argparse
 import yaml
 import mlflow
 from mlflow.tracking import MlflowClient
 import logging
 from datetime import datetime
+
+
+DEFAULT_MODEL_NAME = "work.default.gnu-mlops-model"
+ENV_MODEL_NAME_VAR = "MLFLOW_MODEL_NAME"
 
 # Configure logging with consistent format
 logging.basicConfig(level=logging.INFO)
@@ -743,14 +748,27 @@ def main():
     parser.add_argument(
         '--version',
         type=str,
+        default=None,
         help='Specific model version to deploy (optional, uses latest if not specified)'
     )
     
     args = parser.parse_args()
+
+    model_name = (
+        args.model_name
+        or os.getenv(ENV_MODEL_NAME_VAR)
+        or DEFAULT_MODEL_NAME
+    )
     
+    logger.info("Initialized deployment for model: %s", model_name)
+    logger.info("Deploying to stage: %s", args.stage)
+
     try:
         # ===== Initialize Deployment System =====
-        deployer = ModelDeployment()
+        deployer = ModelDeployment(
+            model_name=model_name,
+            target_stage=args.stage
+        )
         
         # ===== Execute Requested Action =====
         
@@ -759,12 +777,15 @@ def main():
             # Validates model meets 35% accuracy threshold
             version = deployer.deploy_to_staging()
             print(f"\n✓ Model version {version} deployed to Staging")
+            logger.info("Deployed version %s to Staging", version)
         
         elif args.stage in ['production', 'GNU_Production']:
             # Deploy to GNU_Production (from Staging or specific version)
             # Validates model meets 40% accuracy threshold
             # Both 'production' and 'GNU_Production' are accepted for compatibility
             version = deployer.deploy_to_production(args.version)
+            print(f"\n✓ Model version {version} deployed to Production")
+            logger.info("Deployed version %s to Production", version)
             
             if version:
                 print(f"\n✓ Model version {version} deployed to GNU_Production")

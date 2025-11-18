@@ -827,7 +827,7 @@ class MLModelTrainer:
             model_info = mlflow.sklearn.log_model(
                 model,
                 "model",
-                registered_model_name=self.model_name
+                registered_model_name="work.default.gnu-mlops-model"
             )
             
             # Get model version information after registration
