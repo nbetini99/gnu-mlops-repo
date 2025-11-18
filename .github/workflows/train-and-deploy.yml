@@ -72,13 +72,10 @@ jobs:
         echo "DATABRICKS_TOKEN=$DATABRICKS_TOKEN" >> $GITHUB_ENV
         echo "DATABRICKS_WORKSPACE_PATH=$DATABRICKS_WORKSPACE_PATH" >> $GITHUB_ENV
         echo "DATABRICKS_EXPERIMENT_PATH=$DATABRICKS_EXPERIMENT_PATH" >> $GITHUB_ENV
-        # GITHUB_ACTIONS is automatically set by GitHub Actions
-        # Code will detect this and default to SQLite to avoid timeout issues
-        # To force Databricks, set FORCE_DATABRICKS=true
+        echo "FORCE_DATABRICKS=true" >> $GITHUB_ENV
         echo "✓ Environment configured for Databricks"
         echo "✓ Databricks credentials loaded from GitHub Secrets"
-        echo "ℹ Code will default to SQLite in GitHub Actions (avoids timeout issues)"
-        echo "ℹ To use Databricks, set FORCE_DATABRICKS=true environment variable"
+        echo "✓ FORCE_DATABRICKS=true set - will use Databricks MLflow tracking"
     
     - name: Set up environment for local mode
       if: steps.check_databricks.outputs.databricks_available == 'false'
@@ -108,8 +105,8 @@ jobs:
 
     - name: Train model
       env:
-        # Explicitly set SQLite to prevent any Databricks attempts
-        MLFLOW_TRACKING_URI: sqlite:///mlflow.db
+        # Force Databricks if credentials are available
+        FORCE_DATABRICKS: ${{ steps.check_databricks.outputs.databricks_available == 'true' && 'true' || '' }}
       run: |
         python src/train_model.py
     
@@ -160,10 +157,9 @@ jobs:
         echo "DATABRICKS_TOKEN=$DATABRICKS_TOKEN" >> $GITHUB_ENV
         [ -n "$DATABRICKS_WORKSPACE_PATH" ] && echo "DATABRICKS_WORKSPACE_PATH=$DATABRICKS_WORKSPACE_PATH" >> $GITHUB_ENV || true
         [ -n "$DATABRICKS_EXPERIMENT_PATH" ] && echo "DATABRICKS_EXPERIMENT_PATH=$DATABRICKS_EXPERIMENT_PATH" >> $GITHUB_ENV || true
-        # GITHUB_ACTIONS is automatically set by GitHub Actions
-        # Code will detect this and default to SQLite to avoid timeout issues
-        echo "ℹ Code will default to SQLite in GitHub Actions (avoids timeout issues)"
-        echo "ℹ To use Databricks, set FORCE_DATABRICKS=true environment variable"
+        echo "FORCE_DATABRICKS=true" >> $GITHUB_ENV
+        echo "✓ Environment configured for Databricks"
+        echo "✓ FORCE_DATABRICKS=true set - will use Databricks MLflow tracking"
     
     - name: Set up environment for local mode
       if: steps.check_databricks.outputs.databricks_available == 'false'
@@ -172,8 +168,8 @@ jobs:
     
     - name: Deploy to Production
       env:
-        # Explicitly set SQLite to prevent any Databricks attempts
-        MLFLOW_TRACKING_URI: sqlite:///mlflow.db
+        # Force Databricks if credentials are available
+        FORCE_DATABRICKS: ${{ steps.check_databricks.outputs.databricks_available == 'true' && 'true' || '' }}
       run: |
         python src/deploy_model.py --stage production
     
