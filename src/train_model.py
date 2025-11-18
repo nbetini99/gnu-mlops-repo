@@ -517,16 +517,24 @@ class MLModelTrainer:
         self.tracking_uri = tracking_uri
         
         # Determine model name based on tracking URI
-        # Databricks requires three-part name: catalog.schema.model_name
+        # Databricks has two model registry types:
+        # 1. Workspace Model Registry: uses simple name (e.g., "gnu-mlops-model")
+        # 2. Unity Catalog Model Registry: uses three-part name (e.g., "catalog.schema.model_name")
         # SQLite uses simple name: model_name
         base_model_name = self.config['mlflow']['model_name']
         if tracking_uri == 'databricks':
-            # Construct Databricks three-part model name
-            # Try to get catalog and schema from config or environment, default to main.default
-            catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
-            schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
-            self.model_name = f"{catalog}.{schema}.{base_model_name}"
-            logger.info(f"Using Databricks model name format: {self.model_name}")
+            # Check if Unity Catalog is enabled
+            use_unity_catalog = self.config.get('databricks', {}).get('use_unity_catalog', False) or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+            if use_unity_catalog:
+                # Construct Databricks Unity Catalog three-part model name
+                catalog = self.config.get('databricks', {}).get('catalog', os.getenv('DATABRICKS_CATALOG', 'main'))
+                schema = self.config.get('databricks', {}).get('schema', os.getenv('DATABRICKS_SCHEMA', 'default'))
+                self.model_name = f"{catalog}.{schema}.{base_model_name}"
+                logger.info(f"Using Databricks Unity Catalog model name format: {self.model_name}")
+            else:
+                # Use Workspace Model Registry (simple name)
+                self.model_name = base_model_name
+                logger.info(f"Using Databricks Workspace Model Registry (simple name): {self.model_name}")
         else:
             # Use simple name for SQLite/local
             self.model_name = base_model_name

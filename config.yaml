@@ -13,8 +13,9 @@ databricks:
   host: "https://dbc-5e289a33-a706.cloud.databricks.com"  # Default - overridden by DATABRICKS_HOST env var
   token: ""  # Must be set via DATABRICKS_TOKEN environment variable (NEVER hardcode!)
   workspace_path: "/Users/nbatink@gmail.com/gnu-mlops/liveprod"  # Default - overridden by DATABRICKS_WORKSPACE_PATH env var
-  catalog: "main"  # Unity Catalog catalog name (default: main) - can be overridden by DATABRICKS_CATALOG env var
-  schema: "default"  # Unity Catalog schema name (default: default) - can be overridden by DATABRICKS_SCHEMA env var
+  use_unity_catalog: false  # Set to true if using Unity Catalog Model Registry (requires catalog.schema.model_name format)
+  catalog: "main"  # Unity Catalog catalog name (only used if use_unity_catalog: true) - can be overridden by DATABRICKS_CATALOG env var
+  schema: "default"  # Unity Catalog schema name (only used if use_unity_catalog: true) - can be overridden by DATABRICKS_SCHEMA env var
 
 # MLflow Configuration
 mlflow:
