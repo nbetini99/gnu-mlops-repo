@@ -728,13 +728,23 @@ class MLModelTrainer:
         # Set seed for reproducibility
         np.random.seed(self.config['training'].get('random_state', 42))
         
-        # Build feature dictionary
-        synthetic_data = {
-            'feature1': np.random.randn(num_records),
-            'feature2': np.random.randn(num_records), 
-            'feature3': np.random.randn(num_records),
-            'target_column': np.random.randint(0, 2, num_records)
-        }
+        # Build feature dictionary - create all features from config if available
+        feature_columns = self.config.get('data', {}).get('features', [])
+        synthetic_data = {}
+        
+        # Generate all configured features
+        for i, feature in enumerate(feature_columns, 1):
+            if feature not in synthetic_data:
+                synthetic_data[feature] = np.random.randn(num_records)
+        
+        # If no features in config, create default features
+        if not synthetic_data:
+            for i in range(1, 9):  # Create feature1 through feature8
+                synthetic_data[f'feature{i}'] = np.random.randn(num_records)
+        
+        # Add target column (use config target name or default to 'target')
+        target_name = self.config.get('data', {}).get('target', 'target')
+        synthetic_data[target_name] = np.random.randint(0, 2, num_records)
         
         dataset = pd.DataFrame(synthetic_data)
         logger.info(f"✓ Created synthetic dataset with shape: {dataset.shape}")
@@ -777,7 +787,7 @@ class MLModelTrainer:
             logger.error(f"Target column '{target_column}' not found in data!")
             logger.info(f"Available columns: {list(df.columns)}")
             # Try to find alternative target column names
-            possible_targets = ['target', 'Survived', 'survived', 'Target']
+            possible_targets = ['target', 'target_column', 'Survived', 'survived', 'Target', 'TARGET', 'Target_Column']
             for alt_target in possible_targets:
                 if alt_target in df.columns:
                     logger.info(f"Found alternative target column: '{alt_target}'")
