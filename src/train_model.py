@@ -28,6 +28,8 @@ from pathlib import Path
 import sys
 import signal
 from contextlib import contextmanager
+from mlflow.models.signature import infer_signature
+
 
 # Setup logging with custom format
 logging.basicConfig(
@@ -903,20 +905,27 @@ class MLModelTrainer:
                 mlflow.log_metric(metric_name, metric_value)
             
             # ===== STEP 5: Log Model to MLflow and Register =====
-            # Save trained model in MLflow format
-            # This automatically registers the model in Model Registry
-            # The model can now be deployed to Staging or GNU_Production
             logger.info("Registering model in MLflow Model Registry...")
 
-            # self.model_name should already be set in __init__ with the correct format.
-            # For UC this should be: "workspace.default.gnu-mlops-model"
-            registered_name = self.model_name
+            registered_name = self.model_name  # e.g., workspace.default.gnu-mlops-model
+
+            # Infer model signature for Unity Catalog (required)
+            try:
+                # Use training data to infer signature
+                y_pred_sample = model.predict(X_train)
+                signature = infer_signature(X_train, y_pred_sample)
+                logger.info("Inferred model signature for Unity Catalog registration")
+            except Exception as e:
+                logger.warning(f"Could not infer signature automatically: {e}")
+                signature = None
 
             model_info = mlflow.sklearn.log_model(
                 sk_model=model,
                 artifact_path="model",
-                registered_model_name=registered_name
+                registered_model_name=registered_name,
+                signature=signature  # UC requirement
             )
+
 
             # Get model version information after registration
             client = MlflowClient()
