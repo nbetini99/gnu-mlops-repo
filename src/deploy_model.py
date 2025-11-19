@@ -159,44 +159,50 @@ class ModelDeployment:
     
     def get_latest_model_version(self):
         """
-        Retrieve the most recent registered model version
-        
-        Queries MLflow Model Registry for the latest version in "None" stage.
-        Models in "None" stage are newly registered and haven't been promoted yet.
-        
+        Retrieve the most recent registered model version.
+
+        Uses `search_model_versions` which works for both:
+        - Databricks Unity Catalog models
+        - Workspace / non-UC models
+
         Returns:
             str: Version number of the latest model (e.g., "3")
-            
+
         Raises:
             ValueError: If no model versions exist
             Exception: If MLflow query fails
-            
-        Note:
-            Only looks at models in "None" stage - models already in
-            Staging or GNU_Production are not considered.
         """
         try:
-            # Query MLflow for latest versions in "None" stage
-            # "None" stage means newly registered, not yet promoted
-            latest_versions = self.client.get_latest_versions(
-                self.model_name,
-                stages=["None"]
-            )
-            
-            # Validate that at least one version exists
-            if not latest_versions:
+            # Get all versions for this model from the registry
+            versions = self.client.search_model_versions(f"name='{self.model_name}'")
+
+            if not versions:
                 raise ValueError(f"No model versions found for {self.model_name}")
-            
-            # Extract version number from the result
-            latest_version = latest_versions[0].version
-            logger.info(f"Latest model version: {latest_version}")
-            
+
+            # Pick the highest version number
+            latest_mv = max(versions, key=lambda mv: int(mv.version))
+            latest_version = latest_mv.version
+
+            logger.info(
+                f"Latest model version: {latest_version} "
+                f"(run_id={latest_mv.run_id}, status={latest_mv.status})"
+            )
+
             return latest_version
-            
+
         except Exception as e:
             logger.error(f"Error getting latest model version: {str(e)}")
             raise
+
     
+    def _is_unity_catalog_model(self) -> bool:
+        """
+        Heuristic: Unity Catalog models use three-part names:
+        catalog.schema.model_name
+        """
+        return self.model_name.count(".") == 2
+
+
     def get_model_metrics(self, run_id):
         """
         Retrieve performance metrics for a specific training run
@@ -267,55 +273,66 @@ class ModelDeployment:
     
     def transition_model_stage(self, version, stage="GNU_Production"):
         """
-        Move a model version to a different deployment stage
-        
-        Transitions a specific model version to the requested stage in the
-        Model Registry. Automatically archives any existing models in that stage.
-        
-        Args:
-            version (str/int): Model version number to transition
-            stage (str): Target stage name. Options:
-                        - "Staging": For testing and validation
-                        - "GNU_Production": For live production serving
-                        Default is "GNU_Production"
-                        
-        Returns:
-            bool: True if transition successful
-            
-        Raises:
-            Exception: If transition fails (permissions, invalid stage, etc.)
-            
-        Note:
-            archive_existing_versions=True means if version 3 is in GNU_Production
-            and you promote version 4, version 3 automatically moves to Archived.
-            This ensures only one model is in each stage at a time.
-            
-        Example:
-            >>> deployer.transition_model_stage(version=3, stage="Staging")
-            >>> # Version 3 is now in Staging, ready for testing
+        Move a model version to a different deployment stage / alias.
+
+        For Unity Catalog models:
+            - Uses aliases (e.g., 'staging', 'production') instead of stages.
+        For non-UC models:
+            - Uses traditional MLflow stages via transition_model_version_stage.
         """
         try:
-            # Map "GNU_Production" to "Production" for MLflow compatibility
-            # MLflow only accepts: None, Staging, Production, Archived
-            mlflow_stage = "Production" if stage == "GNU_Production" else stage
-            
-            logger.info(f"Transitioning model version {version} to {stage}...")
-            
-            # Perform the stage transition in MLflow Model Registry
-            # archive_existing_versions=True automatically archives previous versions
-            self.client.transition_model_version_stage(
-                name=self.model_name,
-                version=version,
-                stage=mlflow_stage,  # Use MLflow-compatible stage name
-                archive_existing_versions=True  # Archive previous versions in this stage
-            )
-            
-            logger.info(f"Successfully transitioned model to {stage} stage")
-            return True
-            
+            logger.info(f"Transition request: version={version}, stage={stage}")
+
+            if self._is_unity_catalog_model():
+                # ---- Unity Catalog: use aliases instead of stages ----
+                if stage == "GNU_Production":
+                    alias = "production"
+                elif stage == "Staging":
+                    alias = "staging"
+                else:
+                    # Fallback: lower-case alias based on stage string
+                    alias = stage.lower()
+
+                logger.info(
+                    f"Unity Catalog model detected; setting alias '{alias}' "
+                    f"for version {version}"
+                )
+
+                # This assigns the alias (e.g., 'staging' or 'production')
+                # to the given version. Reassigning the alias automatically
+                # switches traffic to this version.
+                self.client.set_registered_model_alias(
+                    name=self.model_name,
+                    alias=alias,
+                    version=str(version),
+                )
+
+                logger.info(f"Successfully set alias '{alias}' for version {version}")
+                return True
+
+            else:
+                # ---- Non-UC: keep using MLflow stages ----
+                if stage == "GNU_Production":
+                    mlflow_stage = "Production"
+                else:
+                    mlflow_stage = stage
+
+                logger.info(f"Transitioning model version {version} to {mlflow_stage}...")
+
+                self.client.transition_model_version_stage(
+                    name=self.model_name,
+                    version=str(version),
+                    stage=mlflow_stage,
+                    archive_existing_versions=True,
+                )
+
+                logger.info(f"Successfully transitioned model to {mlflow_stage} stage")
+                return True
+
         except Exception as e:
-            logger.error(f"Error transitioning model stage: {str(e)}")
+            logger.error(f"Error transitioning model stage/alias: {str(e)}")
             raise
+
     
     def add_model_description(self, version, description=None):
         """
