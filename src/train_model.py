@@ -477,28 +477,12 @@ class MLModelTrainer:
                 # Set up experiment for organizing runs
         gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
 
+        gnu_mlflow_config = self.config['mlflow']['gnu_mlflow_config']
+
         if tracking_uri == "databricks":
-            # --- Databricks: experiment names MUST be absolute workspace paths ---
-            # Priority:
-            #   1) DATABRICKS_EXPERIMENT_PATH env var (if set)
-            #   2) config['mlflow']['gnu_mlflow_config']
-            #   3) default: /Shared/gnu-mlops-experiments
-            exp_path = os.getenv("DATABRICKS_EXPERIMENT_PATH") or gnu_mlflow_config
-
-            # If the value is redacted ('***') or empty, fall back to a safe default
-            if not exp_path or exp_path == "***":
-                exp_path = "/Shared/gnu-mlops-experiments"
-
-            # Ensure it is an absolute path
-            if not exp_path.startswith("/"):
-                # Put it under /Shared if a bare name was given
-                logger.warning(
-                    "Databricks experiment name '%s' is not an absolute path; "
-                    "using '/Shared/%s' instead",
-                    exp_path,
-                    exp_path,
-                )
-                exp_path = f"/Shared/{exp_path}"
+            # Databricks: experiment names MUST be absolute workspace paths.
+            # To avoid invalid or masked paths from env/config, force a safe shared location.
+            exp_path = "/Shared/gnu-mlops-experiments"
 
             try:
                 mlflow.set_experiment(exp_path)
@@ -506,9 +490,8 @@ class MLModelTrainer:
                 logger.info(f"Using Databricks experiment path: {exp_path}")
             except Exception as e:
                 logger.error(f"Failed to set Databricks experiment '{exp_path}': {e}")
-                # Fail fast rather than running with experiment_id=None
+                # Fail fast rather than running with an invalid experiment ID
                 raise
-
         else:
             # --- Local/SQLite behavior (keep your existing timeout + fallback logic) ---
             # Use a local-friendly experiment name if using SQLite
