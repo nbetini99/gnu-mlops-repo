@@ -594,6 +594,37 @@ class MLModelTrainer:
         # (model name logic continues below – keep your existing self.model_name block)
         self.config['mlflow']['gnu_mlflow_config'] = gnu_mlflow_config
 
+                # ---------------------------------------------------------------
+        # Determine model registry name (used for training & deployment)
+        # ---------------------------------------------------------------
+        base_model_name = self.config.get('mlflow', {}).get('model_name', 'gnu-mlops-model')
+
+        # Unity Catalog is used when:
+        #  - tracking URI is Databricks
+        #  - AND UC is enabled via config or environment
+        use_unity_catalog = (
+            tracking_uri == "databricks"
+            and (
+                self.config.get('databricks', {}).get('use_unity_catalog', False)
+                or os.getenv('DATABRICKS_USE_UNITY_CATALOG', '').lower() == 'true'
+            )
+        )
+
+        if use_unity_catalog:
+            catalog = self.config.get('databricks', {}).get(
+                'catalog', os.getenv('DATABRICKS_CATALOG', 'workspace')
+            )
+            schema = self.config.get('databricks', {}).get(
+                'schema', os.getenv('DATABRICKS_SCHEMA', 'default')
+            )
+            self.model_name = f"{catalog}.{schema}.{base_model_name}"
+            logger.info(f"Using Databricks Unity Catalog model name: {self.model_name}")
+        else:
+            # Simple name (SQLite/local or non-UC Databricks)
+            self.model_name = base_model_name
+            logger.info(f"Using simple model name: {self.model_name}")
+
+
     
     def load_data(self):
         """
