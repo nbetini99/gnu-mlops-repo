@@ -469,41 +469,14 @@ class ModelDeployment:
         4. If valid, promote to GNU_Production stage
         5. Archive previous production version
         6. Add deployment metadata with timestamp
-        
-        GNU_Production is the live serving environment. Models that have been
-        tested in Staging should be promoted here. If no Staging model exists,
-        deployment from None stage is allowed (not recommended).
-        
-        Args:
-            version (str/int, optional): Specific version to deploy
-                                        If None, uses latest Staging model or latest None stage model
-                                        
-        Returns:
-            int/str: Version number if deployment successful
-            bool: False if validation fails or no model exists
-            
-        Validation Threshold:
-            - Minimum accuracy: 40%
-            - Purpose: Ensure reasonable quality for production serving
-            - Higher than Staging (35%) for additional safety
-            
-        Best Practice:
-            Always test in Staging first, then promote the same version
-            to GNU_Production. Direct deployment from None stage is possible
-            but not recommended.
-            
-        Example:
-            >>> # Deploy latest Staging model to production
-            >>> version = deployer.deploy_to_production()
-            >>> 
-            >>> # Or deploy specific version
-            >>> version = deployer.deploy_to_production(version=5)
         """
-        logger.info("Deploying model to GNU_Production...")
+        logger.info("Deploying model to Production...")
         
+        version = self.get_latest_model_version()
         # ===== STEP 1: Check if Model Exists =====
         # First, verify the model is registered in MLflow
         try:
+            logger.info("Deploying model to Production...")
             self.client.get_registered_model(self.model_name)
         except Exception as e:
             if "not found" in str(e).lower() or "RESOURCE_DOES_NOT_EXIST" in str(e):
@@ -589,7 +562,7 @@ class ModelDeployment:
             f"Deployed to GNU_Production - Accuracy: {metrics.get('accuracy', 0):.4f} - {datetime.now()}"
         )
         
-        logger.info(f"Model version {version} deployed to GNU_Production")
+        logger.info(f"Successfully deployed model version {version} to Production")
         return version
     
     def rollback_production(self, target_version=None):
@@ -798,7 +771,6 @@ def main():
             logger.info("Deployed version %s to Staging", version)
 
         elif args.stage == "production":
-            print(f"\n✓ Model version {version} deployed to Production")
             version = deployer.deploy_to_production()
             logger.info("Deployed version %s to Production", version)
         
