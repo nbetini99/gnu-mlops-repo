@@ -40,13 +40,19 @@ training:
 
 # Data Configuration
 data:
-  source: "databricks"  # Options: databricks, s3, local
-  table_name: "default.training_data"  # Update with your table name
+  source: "local"  # Options: databricks, s3, local
+  local_path: "data/training/titanic_training_data.csv"  # Path to local training data
+  table_name: "default.training_data"  # Databricks table name (if source is databricks)
   features:
     - feature1
     - feature2
     - feature3
-  target: "target_column"
+    - feature4
+    - feature5
+    - feature6
+    - feature7
+    - feature8
+  target: "target"  # Target column name (Survived: 0 or 1)
   
 # Deployment Configuration
 deployment:

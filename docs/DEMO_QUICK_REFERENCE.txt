@@ -1,0 +1,243 @@
+================================================================================
+GNU MLOps Pipeline - Quick Demo Commands Reference
+================================================================================
+Author: Narsimha Betini
+Date: November 19, 2025
+
+================================================================================
+1. TRAINING
+================================================================================
+
+# Basic Training
+python src/train_model.py
+
+# Training with Custom Config
+python src/train_model.py --config config.local.yaml
+
+================================================================================
+2. DEPLOYMENT
+================================================================================
+
+# Deploy to Staging (35% accuracy threshold)
+python src/deploy_model.py --stage staging
+
+# Deploy to Production (40% accuracy threshold)
+python src/deploy_model.py --stage production
+# OR
+python src/deploy_model.py --stage GNU_Production
+
+# View Model Information
+python src/deploy_model.py --stage info
+
+# Rollback Production Model
+python src/deploy_model.py --stage rollback
+
+================================================================================
+3. SINGLE INFERENCE
+================================================================================
+
+# Single File Inference (Production Model)
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+
+# Single Inference with Staging Model
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv --stage Staging
+
+# Single Inference with Output File
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv --output predictions_single.csv
+
+# Inference on Different Files
+python src/predict.py --input data/inference_input/titanic_inference_batch_02_20251119_104516.csv
+python src/predict.py --input data/inference_input/titanic_inference_batch_03_20251119_104516.csv
+python src/predict.py --input data/inference_input/titanic_inference_batch_04_20251119_104516.csv
+python src/predict.py --input data/inference_input/titanic_inference_batch_05_20251119_104516.csv
+
+================================================================================
+4. BATCH INFERENCE
+================================================================================
+
+# Process All Files in Directory
+python src/batch_inference.py --input data/inference_input/
+
+# Process Specific File
+python src/batch_inference.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+
+# Batch Inference with Custom Output
+python src/batch_inference.py --input data/inference_input/ --output data/custom_batch_output/
+
+# Batch Inference with Custom Config
+python src/batch_inference.py --input data/inference_input/ --config config.local.yaml
+
+================================================================================
+5. DAILY SCHEDULED INFERENCE
+================================================================================
+
+# Manual Daily Inference (Simulates 1 PM PST Run)
+python src/batch_inference.py --input data/inference_input/
+
+# Setup Cron Job (Edit crontab: crontab -e)
+# Run daily at 1 PM PST (13:00)
+0 13 * * * cd /Users/narsimhabetini/gnu-mlops-repo && /path/to/venv/bin/python src/batch_inference.py --input data/inference_input/ >> logs/daily_inference.log 2>&1
+
+================================================================================
+6. RETRAINING
+================================================================================
+
+# Check if Retraining is Needed (30-day check)
+python src/retrain_model.py
+
+# Force Immediate Retraining
+python src/retrain_model.py --force
+
+# Retraining with Custom Config
+python src/retrain_model.py --force --config config.local.yaml
+
+# Setup Cron Job for Automatic Retraining (Edit crontab: crontab -e)
+# Check retraining daily at 1 PM PST
+0 13 * * * cd /Users/narsimhabetini/gnu-mlops-repo && /path/to/venv/bin/python src/retrain_model.py >> logs/retraining.log 2>&1
+
+================================================================================
+7. DATA PREPROCESSING
+================================================================================
+
+# Preprocess Titanic Data
+python scripts/preprocess_titanic_data.py
+
+# Generate More Inference Files
+python scripts/generate_titanic_inference_data.py
+
+================================================================================
+8. MODEL MANAGEMENT
+================================================================================
+
+# View Model Registry Info
+python src/deploy_model.py --stage info
+
+# Launch MLflow UI
+
+# Option 1: Databricks UI (default)
+mlflow ui
+# OR
+python scripts/launch_mlflow_ui.py --backend databricks
+
+# Option 2: Local SQLite UI
+python scripts/launch_mlflow_ui.py --backend sqlite
+# OR
+./scripts/launch_mlflow_ui.sh sqlite
+
+# Option 3: Custom Port
+python scripts/launch_mlflow_ui.py --backend sqlite --port 5001
+
+# Access at: http://localhost:5000 (or specified port)
+
+================================================================================
+9. COMPLETE END-TO-END DEMO
+================================================================================
+
+# Step 1: Preprocess Data
+python scripts/preprocess_titanic_data.py
+
+# Step 2: Train Model
+python src/train_model.py
+
+# Step 3: Deploy to Staging
+python src/deploy_model.py --stage staging
+
+# Step 4: Deploy to Production
+python src/deploy_model.py --stage production
+
+# Step 5: Single Inference
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+
+# Step 6: Batch Inference
+python src/batch_inference.py --input data/inference_input/
+
+# Step 7: Retraining
+python src/retrain_model.py --force
+
+# Step 8: View Results in MLflow UI
+mlflow ui
+
+================================================================================
+10. QUICK DEMO SCENARIOS
+================================================================================
+
+# Scenario 1: First-Time Setup
+python scripts/preprocess_titanic_data.py
+python src/train_model.py
+python src/deploy_model.py --stage production
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+
+# Scenario 2: Batch Processing
+python src/batch_inference.py --input data/inference_input/
+ls -lh data/batch_output/
+
+# Scenario 3: Retraining Demo
+python src/retrain_model.py --force
+python src/deploy_model.py --stage info
+
+# Scenario 4: Full Lifecycle
+python src/train_model.py
+python src/deploy_model.py --stage staging
+python src/deploy_model.py --stage production
+python src/predict.py --input data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+python src/retrain_model.py --force
+python src/deploy_model.py --stage production
+
+================================================================================
+11. MONITORING & LOGS
+================================================================================
+
+# View Training Logs
+tail -50 logs/training_*.log
+
+# View Batch Inference Logs
+tail -50 logs/batch_inference_*.log
+
+# View Retraining Logs
+tail -50 logs/retraining_*.log
+
+# List All Logs
+ls -lt logs/ | head -10
+
+================================================================================
+12. DATA FILES
+================================================================================
+
+# Training Data
+data/training/titanic_training_data.csv
+
+# Test Data
+data/testing/titanic_test_data.csv
+
+# Inference Files (5 files, 10 records each)
+data/inference_input/titanic_inference_batch_01_20251119_104516.csv
+data/inference_input/titanic_inference_batch_02_20251119_104516.csv
+data/inference_input/titanic_inference_batch_03_20251119_104516.csv
+data/inference_input/titanic_inference_batch_04_20251119_104516.csv
+data/inference_input/titanic_inference_batch_05_20251119_104516.csv
+
+# Batch Output
+data/batch_output/
+
+# Batch Archive
+data/batch_archive/
+
+================================================================================
+13. TROUBLESHOOTING
+================================================================================
+
+# Check Data Files
+ls -lh data/training/titanic_training_data.csv
+ls -lh data/inference_input/titanic_inference_batch_*.csv
+wc -l data/training/titanic_training_data.csv
+
+# Verify Model Exists
+python src/deploy_model.py --stage info
+
+# Test Data Loading
+python -c "import pandas as pd; df = pd.read_csv('data/training/titanic_training_data.csv'); print(f'Rows: {len(df)}, Columns: {list(df.columns)}')"
+
+================================================================================
+END OF QUICK REFERENCE
+================================================================================
+

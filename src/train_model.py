@@ -635,7 +635,7 @@ class MLModelTrainer:
         Returns:
             pandas.DataFrame: Loaded dataset
         """
-        data_source = self.config['data'].get('source', 'databricks')
+        data_source = self.config['data'].get('source', 'local')
         logger.info(f"Attempting to load data from: {data_source}")
         
         # Try Databricks/Spark first if available
@@ -654,9 +654,63 @@ class MLModelTrainer:
                 
             except Exception as spark_error:
                 logger.warning(f"Spark connection failed: {spark_error}")
-                logger.info("Falling back to sample data generation...")
+                logger.info("Falling back to local data...")
         
-        # Generate sample data for local development
+        # Try loading from local file
+        if data_source == 'local':
+            local_data_path = self.config['data'].get('local_path', 'data/training/titanic_training_data.csv')
+            data_file = Path(local_data_path)
+            
+            if data_file.exists():
+                logger.info(f"Loading data from local file: {local_data_path}")
+                try:
+                    df = pd.read_csv(data_file)
+                    logger.info(f"✓ Successfully loaded {len(df):,} records from {local_data_path}")
+                    logger.info(f"  Columns: {list(df.columns)}")
+                    return df
+                except Exception as e:
+                    logger.warning(f"Failed to load local data file: {e}")
+                    logger.info("Trying to load raw Titanic data...")
+            else:
+                logger.warning(f"Local data file not found: {local_data_path}")
+                logger.info("Trying to load raw Titanic data...")
+            
+            # Try loading raw Titanic data if preprocessed file doesn't exist
+            titanic_train_path = Path('data/titanic/train.csv')
+            if titanic_train_path.exists():
+                logger.info("Loading raw Titanic training data...")
+                try:
+                    df_raw = pd.read_csv(titanic_train_path)
+                    logger.info(f"Loaded raw Titanic data: {len(df_raw):,} rows")
+                    logger.info(f"  Columns: {list(df_raw.columns)}")
+                    
+                    # Quick preprocessing inline
+                    logger.info("Performing quick preprocessing...")
+                    df = df_raw.copy()
+                    
+                    # Handle missing values
+                    df['Age'].fillna(df['Age'].median(), inplace=True)
+                    df['Embarked'].fillna(df['Embarked'].mode()[0], inplace=True)
+                    df['Fare'].fillna(df['Fare'].median(), inplace=True)
+                    df['HasCabin'] = df['Cabin'].notna().astype(int)
+                    
+                    # One-hot encode
+                    features = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked', 'HasCabin']
+                    df_processed = pd.get_dummies(df[features], columns=['Sex', 'Embarked'], drop_first=True)
+                    df_processed.columns = [f'feature{i+1}' for i in range(len(df_processed.columns))]
+                    
+                    # Add target
+                    if 'Survived' in df.columns:
+                        df_processed['target'] = df['Survived']
+                    
+                    logger.info(f"✓ Preprocessed data: {len(df_processed):,} rows, {len(df_processed.columns)} columns")
+                    return df_processed
+                except Exception as e:
+                    logger.warning(f"Failed to load raw Titanic data: {e}")
+                    logger.info("Falling back to sample data generation...")
+        
+        # Generate sample data for local development (fallback)
+        logger.info("Generating synthetic sample data...")
         return self._create_synthetic_dataset()
     
     def _create_synthetic_dataset(self, num_records=1000):
@@ -707,6 +761,32 @@ class MLModelTrainer:
         feature_columns = self.config['data']['features']
         target_column = self.config['data']['target']
         
+        # Check if columns exist in dataframe
+        logger.info(f"Dataframe columns: {list(df.columns)}")
+        logger.info(f"Looking for features: {feature_columns}")
+        logger.info(f"Looking for target: {target_column}")
+        
+        available_features = [f for f in feature_columns if f in df.columns]
+        if len(available_features) < len(feature_columns):
+            missing = set(feature_columns) - set(available_features)
+            logger.warning(f"Some configured features not found in data: {missing}")
+            logger.info(f"Using available features: {available_features}")
+            feature_columns = available_features
+        
+        if target_column not in df.columns:
+            logger.error(f"Target column '{target_column}' not found in data!")
+            logger.info(f"Available columns: {list(df.columns)}")
+            # Try to find alternative target column names
+            possible_targets = ['target', 'Survived', 'survived', 'Target']
+            for alt_target in possible_targets:
+                if alt_target in df.columns:
+                    logger.info(f"Found alternative target column: '{alt_target}'")
+                    logger.info(f"Updating target column to: '{alt_target}'")
+                    target_column = alt_target
+                    break
+            else:
+                raise ValueError(f"Target column '{self.config['data']['target']}' not found in dataframe. Available columns: {list(df.columns)}")
+        
         logger.info(f"→ Features to use: {', '.join(feature_columns)}")
         logger.info(f"→ Target variable: {target_column}")
         
@@ -728,14 +808,28 @@ class MLModelTrainer:
         
         logger.info(f"Splitting data: {int((1-test_ratio)*100)}% train, {int(test_ratio*100)}% test")
         
-        # Perform stratified split to maintain class distribution
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_features, 
-            y_target, 
-            test_size=test_ratio, 
-            random_state=seed_value,
-            stratify=y_target  # Keep same class proportions
-        )
+        # Perform train/test split
+        # For regression (continuous target), don't use stratify
+        # For classification (discrete target), use stratify
+        is_classification = y_target.dtype in ['int64', 'int32', 'object'] and y_target.nunique() < 20
+        
+        if is_classification:
+            logger.info("Detected classification task - using stratified split")
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_features, 
+                y_target, 
+                test_size=test_ratio, 
+                random_state=seed_value,
+                stratify=y_target  # Keep same class proportions
+            )
+        else:
+            logger.info("Detected regression task - using standard split")
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_features, 
+                y_target, 
+                test_size=test_ratio, 
+                random_state=seed_value
+            )
         
         # Apply feature scaling (normalize to mean=0, std=1)
         # Important: fit on train only to avoid data leakage!
